@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("com.google.devtools.ksp") version "2.2.0-2.0.2"
+//    id("com.google.devtools.ksp") version "2.2.0-2.0.2"
 }
 
 android {
@@ -63,7 +63,7 @@ dependencies {
     // Glide для загрузки постеров
     implementation("com.github.bumptech.glide:glide:4.16.0")
     // Room
-    implementation("androidx.room:room-runtime:2.7.1")
-    implementation("androidx.room:room-ktx:2.7.1")
-    ksp("androidx.room:room-compiler:2.7.1")
+//    implementation("androidx.room:room-runtime:2.7.1")
+//    implementation("androidx.room:room-ktx:2.7.1")
+//    ksp("androidx.room:room-compiler:2.7.1")
 }
