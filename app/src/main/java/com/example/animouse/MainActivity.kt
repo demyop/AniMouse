@@ -9,12 +9,16 @@ import android.util.Log
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.animouse.data.repository.AnimeRepository
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.animouse.ui.adapter.AnimeAdapter
+import com.example.animouse.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         lifecycleScope.launch {
 
@@ -25,17 +29,18 @@ class MainActivity : AppCompatActivity() {
 
                 if (response.isSuccessful) {
 
-                    response.body()
-                        ?.data
-                        ?.Page
-                        ?.media
-                        ?.forEach {
+                    val animeList =
+                        response.body()
+                            ?.data
+                            ?.Page
+                            ?.media
+                            ?: emptyList()
 
-                            Log.d(
-                                "ANIME",
-                                "${it.title.romaji} | ${it.id}"
-                            )
-                        }
+                    binding.recyclerAnime.layoutManager =
+                        LinearLayoutManager(this@MainActivity)
+
+                    binding.recyclerAnime.adapter =
+                        AnimeAdapter(animeList)
                 }
 
             } catch (e: Exception) {
@@ -45,12 +50,6 @@ class MainActivity : AppCompatActivity() {
                     e.message ?: "Unknown error"
                 )
             }
-        }
-
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
         }
     }
 }
