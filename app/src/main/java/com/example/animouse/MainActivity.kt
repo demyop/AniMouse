@@ -12,6 +12,8 @@ import com.example.animouse.data.repository.AnimeRepository
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.animouse.ui.adapter.AnimeAdapter
 import com.example.animouse.databinding.ActivityMainBinding
+import androidx.appcompat.app.ActionBarDrawerToggle
+import android.widget.Toast
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -19,6 +21,19 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        val toggle = ActionBarDrawerToggle(
+            this,
+            binding.drawerLayout,
+            binding.toolbar,
+            R.string.app_name,
+            R.string.app_name
+        )
+
+        binding.drawerLayout.addDrawerListener(toggle)
+        toggle.syncState()
+
+        binding.toolbar.title = "AniMouse | Календарь аниме"
 
         lifecycleScope.launch {
 
@@ -51,6 +66,40 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+
+        binding.navigationView.setNavigationItemSelectedListener {
+
+            when (it.itemId) {
+
+                R.id.menu_home -> {
+                    Toast.makeText(
+                        this,
+                        "Онгоинги",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                R.id.menu_favorites -> {
+                    Toast.makeText(
+                        this,
+                        "Избранное",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                R.id.menu_about -> {
+                    Toast.makeText(
+                        this,
+                        "AniMouse v1.0",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+
+            binding.drawerLayout.closeDrawers()
+            true
+        }
+
     }
 }
 

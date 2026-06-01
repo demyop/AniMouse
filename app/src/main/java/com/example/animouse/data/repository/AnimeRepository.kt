@@ -11,10 +11,11 @@ class AnimeRepository {
             GraphQLRequest(
                 """
                 query {
-                  Page(page: 1, perPage: 10) {
+                  Page(page: 1, perPage: 30) {
                     media(
                       type: ANIME,
-                      status: RELEASING
+                      status: RELEASING,
+                      sort: POPULARITY_DESC
                     ) {
                       id
 
