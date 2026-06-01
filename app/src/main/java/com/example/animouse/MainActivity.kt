@@ -14,13 +14,24 @@ import com.example.animouse.ui.adapter.AnimeAdapter
 import com.example.animouse.databinding.ActivityMainBinding
 import androidx.appcompat.app.ActionBarDrawerToggle
 import android.widget.Toast
+import androidx.room.Room
+import com.example.animouse.data.database.AppDatabase
+import com.example.animouse.data.model.Anime
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private lateinit var database: AppDatabase
+    private var allAnime = listOf<Anime>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        database = Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java,
+            "animouse_db"
+        ).build()
 
         val toggle = ActionBarDrawerToggle(
             this,
@@ -50,9 +61,13 @@ class MainActivity : AppCompatActivity() {
                             ?.Page
                             ?.media
                             ?: emptyList()
+                    allAnime = animeList
 
                     binding.recyclerAnime.layoutManager =
                         LinearLayoutManager(this@MainActivity)
+
+                    binding.recyclerAnime.adapter =
+                        AnimeAdapter(emptyList())
 
                     binding.recyclerAnime.adapter =
                         AnimeAdapter(animeList)
@@ -72,19 +87,18 @@ class MainActivity : AppCompatActivity() {
             when (it.itemId) {
 
                 R.id.menu_home -> {
-                    Toast.makeText(
-                        this,
-                        "Онгоинги",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    showAnime(allAnime)
                 }
 
                 R.id.menu_favorites -> {
-                    Toast.makeText(
-                        this,
-                        "Избранное",
-                        Toast.LENGTH_SHORT
-                    ).show()
+
+                    val favorites =
+                        allAnime.filter {
+
+                            FavoriteManager.favoriteIds.contains(it.id)
+                        }
+
+                    showAnime(favorites)
                 }
 
                 R.id.menu_about -> {
@@ -101,5 +115,12 @@ class MainActivity : AppCompatActivity() {
         }
 
     }
-}
 
+    private fun showAnime(
+        animeList: List<Anime>
+    ) {
+
+        binding.recyclerAnime.adapter =
+            AnimeAdapter(animeList)
+    }
+}

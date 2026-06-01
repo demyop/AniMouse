@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-//    id("com.google.devtools.ksp") version "2.2.0-2.0.2"
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -39,9 +39,19 @@ android {
     }
 
 }
+// ... тут заканчивается блок android { ... }
 
+// 1. Блокируем любые случайные обновления библиотек до версий с багами
+configurations.all {
+    resolutionStrategy {
+        force("androidx.core:core-ktx:1.13.1")
+        force("androidx.core:core:1.13.1")
+        force("androidx.activity:activity:1.9.0")
+    }
+}
+
+// 2. Чистый список зависимостей
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
@@ -50,20 +60,24 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
+    // UI
     implementation("androidx.cardview:cardview:1.0.0")
-    // RecyclerView
     implementation("androidx.recyclerview:recyclerview:1.4.0")
+
     // Lifecycle + ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.9.0")
-    // Retrofit
+
+    // Сеть и Парсинг
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    // Gson
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
-    // Glide для загрузки постеров
+
+    // Изображения
     implementation("com.github.bumptech.glide:glide:4.16.0")
-    // Room
-//    implementation("androidx.room:room-runtime:2.7.1")
-//    implementation("androidx.room:room-ktx:2.7.1")
-//    ksp("androidx.room:room-compiler:2.7.1")
+
+    // Room (Сняли комментарий, теперь всё будет работать)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 }
