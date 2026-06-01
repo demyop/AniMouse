@@ -12,37 +12,26 @@ import java.util.Date
 import java.util.Locale
 
 class AnimeAdapter(
-    private val animeList: List<Anime>
+    private val animeList: List<Anime>,
+    private val favoriteIds: MutableSet<Int>,
+    private val onFavoriteClick: (Int, Boolean) -> Unit
 ) : RecyclerView.Adapter<AnimeAdapter.AnimeViewHolder>() {
 
-    inner class AnimeViewHolder(
-        private val binding: ItemAnimeBinding
-    ) : RecyclerView.ViewHolder(binding.root) {
-
+    inner class AnimeViewHolder(private val binding: ItemAnimeBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(anime: Anime) {
-
-            val isFavorite =
-                FavoriteManager.favoriteIds.contains(anime.id)
+            val isFavorite = favoriteIds.contains(anime.id)
 
             binding.buttonFavorite.setImageResource(
-                if (isFavorite)
-                    android.R.drawable.btn_star_big_on
-                else
-                    android.R.drawable.btn_star_big_off
+                if (isFavorite) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
             )
 
             binding.buttonFavorite.setOnClickListener {
+                val willBeFavorite = !isFavorite
+                // Обновляем локальный список для мгновенного отклика UI
+                if (willBeFavorite) favoriteIds.add(anime.id) else favoriteIds.remove(anime.id)
 
-                if (FavoriteManager.favoriteIds.contains(anime.id)) {
-
-                    FavoriteManager.favoriteIds.remove(anime.id)
-
-                } else {
-
-                    FavoriteManager.favoriteIds.add(anime.id)
-
-                }
-
+                // Вызываем коллбэк для сохранения в базу
+                onFavoriteClick(anime.id, willBeFavorite)
                 notifyItemChanged(adapterPosition)
             }
 
@@ -66,6 +55,12 @@ class AnimeAdapter(
 
                 binding.textEpisode.text =
                     "Эпизод: ${nextEpisode.episode}\n" +
+                            "Выход: ${formatter.format(date)}"
+
+                val totalEpisodes = anime.episodes?.toString() ?: "?"
+
+                binding.textEpisode.text =
+                    "Эпизод: ${nextEpisode.episode} / $totalEpisodes\n" +
                             "Выход: ${formatter.format(date)}"
 
             } else {

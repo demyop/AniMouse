@@ -4,5 +4,6 @@ data class Anime(
     val id: Int,
     val title: Title,
     val coverImage: CoverImage,
-    val nextAiringEpisode: NextAiringEpisode?
+    val nextAiringEpisode: NextAiringEpisode?,
+    val episodes: Int?
 )

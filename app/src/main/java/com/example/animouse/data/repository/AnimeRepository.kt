@@ -18,7 +18,7 @@ class AnimeRepository {
                       sort: POPULARITY_DESC
                     ) {
                       id
-
+                      episodes
                       title {
                         romaji
                       }

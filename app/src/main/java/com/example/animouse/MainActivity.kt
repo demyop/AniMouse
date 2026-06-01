@@ -16,11 +16,13 @@ import androidx.appcompat.app.ActionBarDrawerToggle
 import android.widget.Toast
 import androidx.room.Room
 import com.example.animouse.data.database.AppDatabase
+import com.example.animouse.data.database.FavoriteEntity
 import com.example.animouse.data.model.Anime
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var database: AppDatabase
+    private var favoriteIds = mutableSetOf<Int>()
     private var allAnime = listOf<Anime>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,38 +49,20 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.title = "AniMouse | Календарь аниме"
 
         lifecycleScope.launch {
-
             try {
+                // Сначала загружаем избранное из базы данных
+                val savedFavorites = database.favoriteDao().getAll()
+                favoriteIds = savedFavorites.map { it.animeId }.toMutableSet()
 
-                val response =
-                    AnimeRepository().getAnimeList()
-
+                val response = AnimeRepository().getAnimeList()
                 if (response.isSuccessful) {
+                    allAnime = response.body()?.data?.Page?.media ?: emptyList()
+                    binding.recyclerAnime.layoutManager = LinearLayoutManager(this@MainActivity)
 
-                    val animeList =
-                        response.body()
-                            ?.data
-                            ?.Page
-                            ?.media
-                            ?: emptyList()
-                    allAnime = animeList
-
-                    binding.recyclerAnime.layoutManager =
-                        LinearLayoutManager(this@MainActivity)
-
-                    binding.recyclerAnime.adapter =
-                        AnimeAdapter(emptyList())
-
-                    binding.recyclerAnime.adapter =
-                        AnimeAdapter(animeList)
+                    showAnime(allAnime)
                 }
-
             } catch (e: Exception) {
-
-                Log.e(
-                    "ANIME",
-                    e.message ?: "Unknown error"
-                )
+                Log.e("ANIME", e.message ?: "Unknown error")
             }
         }
 
@@ -91,13 +75,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 R.id.menu_favorites -> {
-
-                    val favorites =
-                        allAnime.filter {
-
-                            FavoriteManager.favoriteIds.contains(it.id)
-                        }
-
+                    val favorites = allAnime.filter { favoriteIds.contains(it.id) }
                     showAnime(favorites)
                 }
 
@@ -116,11 +94,15 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    private fun showAnime(
-        animeList: List<Anime>
-    ) {
-
-        binding.recyclerAnime.adapter =
-            AnimeAdapter(animeList)
+    private fun showAnime(animeList: List<Anime>) {
+        binding.recyclerAnime.adapter = AnimeAdapter(animeList, favoriteIds) { animeId, isAdding ->
+            lifecycleScope.launch {
+                if (isAdding) {
+                    database.favoriteDao().insert(FavoriteEntity(animeId))
+                } else {
+                    database.favoriteDao().delete(FavoriteEntity(animeId))
+                }
+            }
+        }
     }
 }
