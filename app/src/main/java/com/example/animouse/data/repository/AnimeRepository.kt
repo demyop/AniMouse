@@ -19,6 +19,10 @@ class AnimeRepository {
                     ) {
                       id
                       episodes
+                      description
+                      genres
+                      averageScore
+                      
                       title {
                         romaji
                       }

@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.example.animouse.DetailsActivity
 import com.example.animouse.data.model.Anime
 import com.example.animouse.databinding.ItemAnimeBinding
 
@@ -72,6 +73,19 @@ class AnimeAdapter(
             Glide.with(binding.root)
                 .load(anime.coverImage.large)
                 .into(binding.imagePoster)
+
+            binding.root.setOnClickListener {
+                val context = binding.root.context
+                val intent = android.content.Intent(context, DetailsActivity::class.java).apply {
+                    putExtra("EXTRA_TITLE", anime.title.romaji)
+                    putExtra("EXTRA_POSTER", anime.coverImage.large)
+                    putExtra("EXTRA_SCORE", anime.averageScore ?: 0)
+                    putStringArrayListExtra("EXTRA_GENRES", ArrayList(anime.genres ?: emptyList()))
+                    putExtra("EXTRA_DESC", anime.description ?: "Описание отсутствует.")
+                }
+                context.startActivity(intent)
+            }
+
         }
     }
 
