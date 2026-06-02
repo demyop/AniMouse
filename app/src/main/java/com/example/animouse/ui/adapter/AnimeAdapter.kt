@@ -1,116 +1,91 @@
 package com.example.animouse.ui.adapter
 
+import android.content.Intent
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.animouse.DetailsActivity
+import com.example.animouse.R
+import com.example.animouse.databinding.ItemAnimeOngoingBinding
 import com.example.animouse.data.model.Anime
-import com.example.animouse.databinding.ItemAnimeBinding
-
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class AnimeAdapter(
     private val animeList: List<Anime>,
-    private val favoriteIds: MutableSet<Int>,
-    private val onFavoriteClick: (Int, Boolean) -> Unit
+    private val statuses: Map<Int, String>,
+    private val onLongClick: (Anime, View) -> Unit // МЕНЯЕМ ЛЯМБДУ на долгое нажатие
 ) : RecyclerView.Adapter<AnimeAdapter.AnimeViewHolder>() {
 
-    inner class AnimeViewHolder(private val binding: ItemAnimeBinding) : RecyclerView.ViewHolder(binding.root) {
+    private val statusLabels = mapOf(
+        "WATCHING" to "Смотрю",
+        "PLANNED" to "В планах",
+        "COMPLETED" to "Просмотрено",
+        "DROPPED" to "Брошено"
+    )
+
+    inner class AnimeViewHolder(private val binding: ItemAnimeOngoingBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(anime: Anime) {
-            val isFavorite = favoriteIds.contains(anime.id)
+            binding.textTitle.text = anime.title.romaji ?: "Без названия"
+            binding.textScore.text = (anime.averageScore ?: 0).toString()
 
-            binding.buttonFavorite.setImageResource(
-                if (isFavorite) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
-            )
-
-            binding.buttonFavorite.setOnClickListener {
-                val willBeFavorite = !isFavorite
-                // Обновляем локальный список для мгновенного отклика UI
-                if (willBeFavorite) favoriteIds.add(anime.id) else favoriteIds.remove(anime.id)
-
-                // Вызываем коллбэк для сохранения в базу
-                onFavoriteClick(anime.id, willBeFavorite)
-                notifyItemChanged(adapterPosition)
-            }
-
-            binding.textTitle.text =
-                anime.title.romaji
-
-            val nextEpisode =
-                anime.nextAiringEpisode
-
-            if (nextEpisode != null) {
-
-                val date = Date(
-                    nextEpisode.airingAt * 1000
-                )
-
-                val formatter =
-                    SimpleDateFormat(
-                        "dd.MM.yyyy HH:mm",
-                        Locale.getDefault()
-                    )
-
-                binding.textEpisode.text =
-                    "Эпизод: ${nextEpisode.episode}\n" +
-                            "Выход: ${formatter.format(date)}"
-
-                val totalEpisodes = anime.episodes?.toString() ?: "?"
-
-                binding.textEpisode.text =
-                    "Эпизод: ${nextEpisode.episode} / $totalEpisodes\n" +
-                            "Выход: ${formatter.format(date)}"
-
-            } else {
-
-                binding.textEpisode.text =
-                    "Дата выхода неизвестна"
-            }
-
-            Glide.with(binding.root)
+            Glide.with(binding.root.context)
                 .load(anime.coverImage.large)
                 .into(binding.imagePoster)
 
+            val nextEp = anime.nextAiringEpisode?.episode
+            if (nextEp != null) {
+                binding.textEpisodes.text = "${nextEp - 1} eps"
+            } else {
+                binding.textEpisodes.text = "0 eps"
+            }
+
+            // --- НОВАЯ ЛОГИКА ЦВЕТНЫХ ТЕГОВ СПИСКОВ ---
+            val currentStatus = statuses[anime.id]
+            if (currentStatus != null && currentStatus != "NONE") {
+                binding.badgeStatus.visibility = View.VISIBLE
+                binding.badgeStatus.text = statusLabels[currentStatus] ?: currentStatus
+
+                // Красим фон плашки в зависимости от статуса
+                when(currentStatus) {
+                    "WATCHING" -> binding.badgeStatus.setBackgroundResource(R.drawable.bg_badge_turquoise)
+                    "PLANNED" -> binding.badgeStatus.setBackgroundResource(R.drawable.bg_badge_orange)
+                    "COMPLETED" -> binding.badgeStatus.setBackgroundResource(R.drawable.bg_badge_green) // ДОБАВИЛИ ЗЕЛЕНЫЙ
+                    else -> binding.badgeStatus.setBackgroundResource(R.drawable.bg_badge_neutral)
+                }
+
+            } else {
+                binding.badgeStatus.visibility = View.GONE
+            }
+
+            // --- ОБРАБОТКА ДОЛГОГО НАЖАТИЯ на всю карточку ---
+            binding.root.setOnLongClickListener { view ->
+                onLongClick(anime, view)
+                true // true означает, что событие обработано и обычный клик не сработает
+            }
+
+            // Обычный клик для перехода на экран деталей
             binding.root.setOnClickListener {
                 val context = binding.root.context
-                val intent = android.content.Intent(context, DetailsActivity::class.java).apply {
+                val intent = Intent(context, DetailsActivity::class.java).apply {
+                    putExtra("EXTRA_ID", anime.id)
                     putExtra("EXTRA_TITLE", anime.title.romaji)
                     putExtra("EXTRA_POSTER", anime.coverImage.large)
                     putExtra("EXTRA_SCORE", anime.averageScore ?: 0)
-                    putStringArrayListExtra("EXTRA_GENRES", ArrayList(anime.genres ?: emptyList()))
-                    putExtra("EXTRA_DESC", anime.description ?: "Описание отсутствует.")
                 }
                 context.startActivity(intent)
             }
-
         }
     }
 
-    override fun onCreateViewHolder(
-        parent: ViewGroup,
-        viewType: Int
-    ): AnimeViewHolder {
-
-        val binding =
-            ItemAnimeBinding.inflate(
-                LayoutInflater.from(parent.context),
-                parent,
-                false
-            )
-
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AnimeViewHolder {
+        val binding = ItemAnimeOngoingBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return AnimeViewHolder(binding)
     }
 
-    override fun onBindViewHolder(
-        holder: AnimeViewHolder,
-        position: Int
-    ) {
+    override fun onBindViewHolder(holder: AnimeViewHolder, position: Int) {
         holder.bind(animeList[position])
     }
 
-    override fun getItemCount() =
-        animeList.size
+    override fun getItemCount() = animeList.size
 }

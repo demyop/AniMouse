@@ -17,30 +17,195 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/layoutListsHeader"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="@color/bg_dark_card"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="0dp"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/textTotalAnime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Всего в списках: 0"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="12dp"/>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                app:cardCornerRadius="4dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:id="@+id/layoutChartBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal">
+                    <View android:id="@+id/barWatching" android:layout_width="0dp" android:layout_height="match_parent" android:background="@color/turquoise_secondary" />
+                    <View android:id="@+id/barPlanned" android:layout_width="0dp" android:layout_height="match_parent" android:background="@color/orange_accent" />
+                    <View android:id="@+id/barCompleted" android:layout_width="0dp" android:layout_height="match_parent" android:background="@color/green_accent" />
+                    <View android:id="@+id/barDropped" android:layout_width="0dp" android:layout_height="match_parent" android:background="#4B5563" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp"
+                android:baselineAligned="false">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center_vertical">
+                        <com.google.android.material.card.MaterialCardView android:layout_width="10dp" android:layout_height="10dp" app:cardCornerRadius="5dp" app:cardElevation="0dp" app:cardBackgroundColor="@color/turquoise_secondary"/>
+                        <TextView android:id="@+id/legendWatching" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/text_secondary" android:textSize="12sp" android:text="Смотрю: 0" />
+                    </LinearLayout>
+
+                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center_vertical" android:layout_marginTop="4dp">
+                        <com.google.android.material.card.MaterialCardView android:layout_width="10dp" android:layout_height="10dp" app:cardCornerRadius="5dp" app:cardElevation="0dp" app:cardBackgroundColor="@color/green_accent"/>
+                        <TextView android:id="@+id/legendCompleted" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/text_secondary" android:textSize="12sp" android:text="Просмотрено: 0" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center_vertical">
+                        <com.google.android.material.card.MaterialCardView android:layout_width="10dp" android:layout_height="10dp" app:cardCornerRadius="5dp" app:cardElevation="0dp" app:cardBackgroundColor="@color/orange_accent"/>
+                        <TextView android:id="@+id/legendPlanned" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/text_secondary" android:textSize="12sp" android:text="В планах: 0" />
+                    </LinearLayout>
+
+                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center_vertical" android:layout_marginTop="4dp">
+                        <com.google.android.material.card.MaterialCardView android:layout_width="10dp" android:layout_height="10dp" app:cardCornerRadius="5dp" app:cardElevation="0dp" app:cardBackgroundColor="#4B5563"/>
+                        <TextView android:id="@+id/legendDropped" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/text_secondary" android:textSize="12sp" android:text="Брошено: 0" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:visibility="gone"
+        android:layout_marginTop="8dp"
+        app:tabIndicatorHeight="0dp"
+        app:tabRippleColor="@null"
+        android:background="@color/bg_dark_deep"
+        app:tabMode="scrollable"
         app:layout_constraintTop_toBottomOf="@id/toolbar"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPager"
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layoutFilters"
         android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_filter_plate"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
         android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/tabLayout"
-        app:layout_constraintBottom_toTopOf="@id/bottomNavigation"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:id="@+id/iconSort"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_filter_funnel_reg"
+            app:tint="@color/text_secondary"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <TextView
+            android:id="@+id/textSortTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Все тайтлы"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            android:layout_marginStart="8dp"
+            app:layout_constraintStart_toEndOf="@id/iconSort"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchFavorites"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="0dp"
+            android:scaleX="0.8"
+            android:scaleY="0.8"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Только избранное"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:layout_marginEnd="4dp"
+            app:layout_constraintEnd_toStartOf="@id/switchFavorites"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <androidx.viewpager2.widget.ViewPager2
+    android:id="@+id/viewPager"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:visibility="gone"
+    app:layout_constraintTop_toBottomOf="@id/layoutFilters"
+    app:layout_constraintBottom_toTopOf="@id/bottomNavigation"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintEnd_toEndOf="parent"/>
+
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/barrierHeaders"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="layoutFilters,layoutListsHeader,tabLayout" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerAnime"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        android:layout_marginTop="8dp"
+        app:layout_constraintTop_toBottomOf="@id/barrierHeaders"
         app:layout_constraintBottom_toTopOf="@+id/bottomNavigation"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
@@ -52,6 +217,10 @@
         app:menu="@menu/bottom_menu"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent"
+        app:itemIconTint="@color/nav_item_colors"
+        app:itemTextColor="@color/nav_item_colors"
+        app:itemActiveIndicatorStyle="@null"
+        app:itemRippleColor="@android:color/transparent"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

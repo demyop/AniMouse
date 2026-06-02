@@ -25,7 +25,8 @@ class SchedulePagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        holder.recyclerView.adapter = AnimeAdapter(daysData[position], favoriteIds, onFavoriteClick)
+        // --- ВОТ ЗДЕСЬ МЫ ЗАМЕНИЛИ AnimeAdapter НА ScheduleAnimeAdapter ---
+        holder.recyclerView.adapter = ScheduleAnimeAdapter(daysData[position], favoriteIds, onFavoriteClick)
     }
 
     override fun getItemCount(): Int = daysData.size

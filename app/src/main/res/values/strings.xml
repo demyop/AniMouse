@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">AniMouse</string>
+    <string-array name="status_array">
+        <item>Не добавлено</item>
+        <item>Смотрю</item>
+        <item>В планах</item>
+        <item>Просмотрено</item>
+        <item>Брошено</item>
+    </string-array>
 </resources>
