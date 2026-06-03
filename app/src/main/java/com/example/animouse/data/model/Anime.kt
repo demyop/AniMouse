@@ -9,5 +9,6 @@ data class Anime(
     val episodes: Int?,
     val description: String?,   // Синопсис/Описание
     val genres: List<String>?,  // Список жанров
-    val averageScore: Int?      // Рейтинг (от 0 до 100)
+    val averageScore: Int?,      // Рейтинг (от 0 до 100)
+    val status: String?,
 )

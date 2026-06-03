@@ -9,8 +9,6 @@ import com.bumptech.glide.Glide
 import com.example.animouse.R
 import com.example.animouse.databinding.ItemAnimeOngoingBinding
 import com.example.animouse.data.model.Anime
-
-// ИСПРАВЛЕННЫЙ ИМПОРТ (Студия искала его не в той папке!)
 import com.example.animouse.ui.activity.DetailsActivity
 
 class AnimeAdapter(
@@ -42,6 +40,7 @@ class AnimeAdapter(
                 binding.textEpisodes.text = "0 eps"
             }
 
+            // === 1. ПОЛЬЗОВАТЕЛЬСКИЕ СТАТУСЫ (Твоя логика) ===
             val currentStatus = statuses[anime.id]
             if (currentStatus != null && currentStatus != "NONE") {
                 binding.badgeStatus.visibility = View.VISIBLE
@@ -53,17 +52,38 @@ class AnimeAdapter(
                     "COMPLETED" -> binding.badgeStatus.setBackgroundResource(R.drawable.bg_badge_green)
                     else -> binding.badgeStatus.setBackgroundResource(R.drawable.bg_badge_neutral)
                 }
-
             } else {
                 binding.badgeStatus.visibility = View.GONE
             }
+
+            // === 2. НОВАЯ ЛОГИКА: СТАТУС ВЫПУСКА (Онгоинг/Вышло) ===
+            // Используем textReleaseStatus, который мы добавили в XML
+            when (anime.status?.lowercase()) {
+                "ongoing", "releasing" -> {
+                    binding.textReleaseStatus.text = "Онгоинг"
+                    binding.textReleaseStatus.setBackgroundResource(R.drawable.bg_badge_turquoise)
+                    binding.textReleaseStatus.visibility = View.VISIBLE
+                }
+                "anons", "upcoming" -> {
+                    binding.textReleaseStatus.text = "Анонс"
+                    binding.textReleaseStatus.setBackgroundResource(R.drawable.bg_badge_orange)
+                    binding.textReleaseStatus.visibility = View.VISIBLE
+                }
+                "released", "finished" -> {
+                    binding.textReleaseStatus.text = "Вышло"
+                    binding.textReleaseStatus.setBackgroundResource(R.drawable.bg_badge_green)
+                    binding.textReleaseStatus.visibility = View.VISIBLE
+                }
+                else -> binding.textReleaseStatus.visibility = View.GONE
+            }
+            // ========================================================
 
             binding.root.setOnLongClickListener { view ->
                 onLongClick(anime, view)
                 true
             }
 
-// Обычный клик для перехода на экран деталей
+            // Обычный клик для перехода на экран деталей
             binding.root.setOnClickListener {
                 val context = binding.root.context
                 val intent = Intent(context, DetailsActivity::class.java).apply {
@@ -72,11 +92,9 @@ class AnimeAdapter(
                     putExtra("EXTRA_TITLE", anime.title.romaji)
                     putExtra("EXTRA_POSTER", anime.coverImage.large)
                     putExtra("EXTRA_SCORE", anime.averageScore ?: 0)
-
-                    // ДОБАВЛЯЕМ НОВЫЕ ДАННЫЕ ДЛЯ ПОДСТРАХОВКИ:
-                    putExtra("EXTRA_DESC_ENG", anime.description) // Английский синопсис
-                    putExtra("EXTRA_EPISODES_TOTAL", anime.episodes ?: 0) // Всего серий по версии AniList
-                    putStringArrayListExtra("EXTRA_GENRES", ArrayList(anime.genres ?: emptyList())) // Жанры/теги
+                    putExtra("EXTRA_DESC_ENG", anime.description)
+                    putExtra("EXTRA_EPISODES_TOTAL", anime.episodes ?: 0)
+                    putStringArrayListExtra("EXTRA_GENRES", ArrayList(anime.genres ?: emptyList()))
                 }
                 context.startActivity(intent)
             }

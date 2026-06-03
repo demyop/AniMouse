@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.allAnime.observe(this) { refreshUI() }
         viewModel.animeStatuses.observe(this) { refreshUI() }
+        viewModel.localAnime.observe(this) { refreshUI() } // Перерисовываем UI при обновлении кэша базы
 
         binding.toolbar.setOnClickListener {
             Toast.makeText(this, "AniMouse v1.0", Toast.LENGTH_SHORT).show()
@@ -145,18 +146,20 @@ class MainActivity : AppCompatActivity() {
     private fun openFolder(statusId: String, title: String) {
         openedFolderStatus = statusId
         binding.toolbar.title = "Списки | $title"
-        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_reg) // Показываем стрелочку
+        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_reg)
 
-        binding.layoutListsHeader.visibility = View.GONE // Прячем график
-        binding.recyclerAnime.layoutManager = GridLayoutManager(this, 2) // Включаем сетку
+        binding.layoutListsHeader.visibility = View.GONE
+        binding.recyclerAnime.layoutManager = GridLayoutManager(this, 2)
 
-        val currentAnime = viewModel.allAnime.value ?: emptyList()
+        // ЧИТАЕМ ИЗ ЛОКАЛЬНОЙ БАЗЫ вместо сети!
+        val localAnimeList = viewModel.localAnime.value ?: emptyList()
         val statuses = viewModel.animeStatuses.value ?: emptyMap()
 
-        // Фильтруем аниме только для этой папки
-        val folderAnime = currentAnime.filter { statuses[it.id] == statusId }
+        // Фильтруем локальные данные по статусу папки и конвертируем в объекты Anime
+        val folderAnime = localAnimeList
+            .filter { it.status == statusId }
+            .map { mapEntityToAnime(it) }
 
-        // Используем наш стильный адаптер с бейджами и долгим нажатием
         binding.recyclerAnime.adapter = AnimeAdapter(folderAnime, statuses) { anime, _ ->
             showBottomSheetDialog(anime)
         }
@@ -205,7 +208,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ... ОСТАЛЬНЫЕ МЕТОДЫ (showSchedule, showAnime, showListsScreen, getTodayIndex, getDayOfWeekFromTimestamp) ...
 
     private fun showSchedule(animeList: List<Anime>, savedIds: Set<Int>) {
         // (Твой текущий рабочий код showSchedule)
@@ -354,10 +356,13 @@ class MainActivity : AppCompatActivity() {
         updateBarWeight(binding.barCompleted, countCompleted)
         updateBarWeight(binding.barDropped, countDropped)
 
-        val watchingAnime = animeList.filter { statuses[it.id] == "WATCHING" }
-        val plannedAnime = animeList.filter { statuses[it.id] == "PLANNED" }
-        val completedAnime = animeList.filter { statuses[it.id] == "COMPLETED" }
-        val droppedAnime = animeList.filter { statuses[it.id] == "DROPPED" }
+// Конвертируем ВСЕ локальные данные для превьюшек папок
+        val allLocalAsAnime = viewModel.localAnime.value?.map { mapEntityToAnime(it) } ?: emptyList()
+
+        val watchingAnime = allLocalAsAnime.filter { statuses[it.id] == "WATCHING" }
+        val plannedAnime = allLocalAsAnime.filter { statuses[it.id] == "PLANNED" }
+        val completedAnime = allLocalAsAnime.filter { statuses[it.id] == "COMPLETED" }
+        val droppedAnime = allLocalAsAnime.filter { statuses[it.id] == "DROPPED" }
 
         val folders = listOf(
             FolderItem(
@@ -400,6 +405,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
+
     private fun getDayOfWeekFromTimestamp(timestampSec: Long): Int {
         val cal = Calendar.getInstance()
         cal.timeInMillis = timestampSec * 1000
@@ -414,4 +421,20 @@ class MainActivity : AppCompatActivity() {
             else -> 0
         }
     }
+
+    private fun mapEntityToAnime(entity: com.example.animouse.data.database.UserAnimeEntity): Anime {
+        return Anime(
+            id = entity.animeId,
+            idMal = entity.idMal,
+            title = com.example.animouse.data.model.Title(romaji = entity.title),
+            coverImage = com.example.animouse.data.model.CoverImage(large = entity.posterUrl ?: ""),
+            averageScore = entity.score,
+            episodes = entity.episodesTotal,
+            description = "Данные из оффлайн-списка", // <-- Добавили заглушку
+            genres = emptyList(),                    // <-- Добавили заглушку
+            status = entity.animeStatus,
+            nextAiringEpisode = null
+        )
+    }
+
 }

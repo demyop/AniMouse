@@ -173,8 +173,12 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         binding.btnStatus.setOnClickListener {
-            if (currentAnimeId != -1) showBottomSheetDialog(currentAnimeId, title)
-            else Toast.makeText(this, "Синхронизация с базой...", Toast.LENGTH_SHORT).show()
+            if (currentAnimeId != -1) {
+                // Передаем все необходимые данные, которые мы получили из Интента в начале onCreate
+                showBottomSheetDialog(currentAnimeId, idMal, title, posterUrl, score, totalEpisodesAniList)
+            } else {
+                Toast.makeText(this, "Синхронизация с базой...", Toast.LENGTH_SHORT).show()
+            }
         }
 
         binding.btnNote.setOnClickListener {
@@ -239,20 +243,42 @@ class DetailsActivity : AppCompatActivity() {
         }
     }
 
-    private fun showBottomSheetDialog(animeId: Int, animeTitle: String) {
+    private fun showBottomSheetDialog(animeId: Int, idMal: Int, title: String, posterUrl: String?, score: Int, epTotalAniList: Int) {
         try {
             val bottomSheetDialog = BottomSheetDialog(this)
             val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_status, null)
             bottomSheetDialog.setContentView(sheetView)
 
             val titleView = sheetView.findViewById<android.widget.TextView>(R.id.textSheetTitle)
-            titleView.text = animeTitle
+            titleView.text = title
 
-            sheetView.findViewById<View>(R.id.btnWatching).setOnClickListener { viewModel.updateStatus(animeId, "WATCHING"); bottomSheetDialog.dismiss() }
-            sheetView.findViewById<View>(R.id.btnPlanned).setOnClickListener { viewModel.updateStatus(animeId, "PLANNED"); bottomSheetDialog.dismiss() }
-            sheetView.findViewById<View>(R.id.btnCompleted).setOnClickListener { viewModel.updateStatus(animeId, "COMPLETED"); bottomSheetDialog.dismiss() }
-            sheetView.findViewById<View>(R.id.btnDropped).setOnClickListener { viewModel.updateStatus(animeId, "DROPPED"); bottomSheetDialog.dismiss() }
-            sheetView.findViewById<View>(R.id.btnRemove).setOnClickListener { viewModel.updateStatus(animeId, null); bottomSheetDialog.dismiss() }
+            // Достаем актуальные данные по эпизодам и статусу выхода из Шикимори
+            val currentDetails = viewModel.animeDetails.value
+            val epAired = currentDetails?.episodes_aired ?: 0
+            val epTotal = if (epTotalAniList > 0) epTotalAniList else (currentDetails?.episodes ?: 0)
+            val animeReleaseStatus = currentDetails?.status
+
+            // Функция-помощник, чтобы не дублировать код
+            fun saveWithStatus(newStatus: String?) {
+                viewModel.updateStatus(
+                    animeId = animeId,
+                    idMal = idMal,
+                    newStatus = newStatus,
+                    title = title,
+                    posterUrl = posterUrl,
+                    score = score,
+                    epTotal = epTotal,
+                    epAired = epAired,
+                    animeStatus = animeReleaseStatus
+                )
+                bottomSheetDialog.dismiss()
+            }
+
+            sheetView.findViewById<View>(R.id.btnWatching).setOnClickListener { saveWithStatus("WATCHING") }
+            sheetView.findViewById<View>(R.id.btnPlanned).setOnClickListener { saveWithStatus("PLANNED") }
+            sheetView.findViewById<View>(R.id.btnCompleted).setOnClickListener { saveWithStatus("COMPLETED") }
+            sheetView.findViewById<View>(R.id.btnDropped).setOnClickListener { saveWithStatus("DROPPED") }
+            sheetView.findViewById<View>(R.id.btnRemove).setOnClickListener { saveWithStatus(null) }
 
             bottomSheetDialog.show()
         } catch (e: Exception) {

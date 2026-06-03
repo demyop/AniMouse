@@ -29,12 +29,41 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun updateStatus(animeId: Int, newStatus: String?) {
+    fun updateStatus(
+        animeId: Int,
+        idMal: Int,
+        newStatus: String?,
+        title: String,
+        posterUrl: String?,
+        score: Int,
+        epTotal: Int,
+        epAired: Int,
+        animeStatus: String?
+    ) {
         viewModelScope.launch {
             if (newStatus == null || newStatus == "NONE") {
-                database.userAnimeDao().deleteById(animeId)
+                // Если юзер нажал "Удалить из списков"
+                val current = database.userAnimeDao().getAnimeById(animeId)
+                if (current != null) {
+                    // Сначала обнуляем статус (чтобы пропало из стандартных списков)
+                    database.userAnimeDao().insert(current.copy(status = null))
+                    // А затем пытаемся удалить полностью (удалится, только если нет в кастомных списках)
+                    database.userAnimeDao().deleteIfUnused(animeId)
+                }
             } else {
-                database.userAnimeDao().insert(UserAnimeEntity(animeId, newStatus))
+                // Добавляем или обновляем карточку
+                val entity = com.example.animouse.data.database.UserAnimeEntity(
+                    animeId = animeId,
+                    idMal = idMal,
+                    status = newStatus,
+                    title = title,
+                    posterUrl = posterUrl,
+                    score = score,
+                    episodesTotal = epTotal,
+                    episodesAired = epAired,
+                    animeStatus = animeStatus
+                )
+                database.userAnimeDao().insert(entity)
             }
             _currentStatus.value = newStatus
         }
