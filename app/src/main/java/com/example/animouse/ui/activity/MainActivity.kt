@@ -55,6 +55,24 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
+        binding.toolbar.setOnClickListener {
+            Toast.makeText(this, "AniMouse v1.0", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.switchFavorites.setOnCheckedChangeListener { _, _ -> refreshUI() }
+
+        // === ВСТАВЛЯЕМ КЛИК ПО ЛУПЕ СЮДА ===
+        binding.btnSearch.setOnClickListener {
+            val intent = android.content.Intent(this, com.example.animouse.ui.activity.SearchActivity::class.java)
+            startActivity(intent)
+        }
+        // ===================================
+
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            refreshUI(item.itemId)
+            true
+        }
+
         // --- ОБРАБОТКА КНОПКИ "НАЗАД" (Для выхода из папок) ---
         // Системный жест "Назад"
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -75,6 +93,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+
 
     override fun onResume() {
         super.onResume()

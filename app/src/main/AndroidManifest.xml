@@ -22,6 +22,10 @@
             </intent-filter>
         </activity>
         <activity android:name=".ui.activity.DetailsActivity" android:exported="false" />
+        <activity
+            android:name=".ui.activity.SearchActivity"
+            android:windowSoftInputMode="stateVisible|adjustPan"
+            android:exported="false" />
     </application>
 
 </manifest>

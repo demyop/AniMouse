@@ -18,6 +18,7 @@ class AnimeRepository {
                       sort: POPULARITY_DESC
                     ) {
                       id
+                      idMal  # <-- ДОБАВИЛИ ЗАПРОС ID ДЛЯ ШИКИМОРИ
                       episodes
                       description
                       genres

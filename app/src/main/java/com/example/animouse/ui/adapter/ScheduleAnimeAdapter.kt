@@ -5,7 +5,7 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.example.animouse.DetailsActivity
+import com.example.animouse.ui.activity.DetailsActivity
 import com.example.animouse.R
 import com.example.animouse.databinding.ItemAnimeScheduleBinding
 import com.example.animouse.data.model.Anime
@@ -54,13 +54,20 @@ class ScheduleAnimeAdapter(
             }
 
             // Обработка клика по самой карточке (переход на экран деталей)
+            // Обычный клик для перехода на экран деталей
             binding.root.setOnClickListener {
                 val context = binding.root.context
                 val intent = Intent(context, DetailsActivity::class.java).apply {
                     putExtra("EXTRA_ID", anime.id)
+                    putExtra("EXTRA_ID_MAL", anime.idMal ?: -1)
                     putExtra("EXTRA_TITLE", anime.title.romaji)
                     putExtra("EXTRA_POSTER", anime.coverImage.large)
                     putExtra("EXTRA_SCORE", anime.averageScore ?: 0)
+
+                    // ДОБАВЛЯЕМ НОВЫЕ ДАННЫЕ ДЛЯ ПОДСТРАХОВКИ:
+                    putExtra("EXTRA_DESC_ENG", anime.description) // Английский синопсис
+                    putExtra("EXTRA_EPISODES_TOTAL", anime.episodes ?: 0) // Всего серий по версии AniList
+                    putStringArrayListExtra("EXTRA_GENRES", ArrayList(anime.genres ?: emptyList())) // Жанры/теги
                 }
                 context.startActivity(intent)
             }
