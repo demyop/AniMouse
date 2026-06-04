@@ -21,10 +21,10 @@
             android:layout_width="80dp"
             android:layout_height="120dp"
             android:scaleType="centerCrop"
-            app:shapeAppearanceOverlay="@style/RoundedImageView"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:shapeAppearanceOverlay="@style/RoundedImageView"
             tools:src="@tools:sample/backgrounds/scenic" />
 
         <TextView
@@ -35,10 +35,10 @@
             android:layout_marginTop="6dp"
             android:layout_marginEnd="2dp"
             android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
             android:maxLines="2"
             android:textColor="@color/text_primary"
             android:textSize="16sp"
-            android:fontFamily="sans-serif-medium"
             app:layout_constraintEnd_toStartOf="@id/layoutAiring"
             app:layout_constraintStart_toEndOf="@id/imagePoster"
             app:layout_constraintTop_toTopOf="@id/imagePoster"
@@ -50,17 +50,17 @@
             android:layout_height="1dp"
             android:layout_marginTop="8dp"
             android:background="#339CA3AF"
-            app:layout_constraintStart_toStartOf="@id/textTitle"
             app:layout_constraintEnd_toEndOf="@id/textTitle"
+            app:layout_constraintStart_toStartOf="@id/textTitle"
             app:layout_constraintTop_toBottomOf="@id/textTitle" />
 
         <LinearLayout
             android:id="@+id/layoutRating"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
             android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
             app:layout_constraintStart_toStartOf="@id/textTitle"
             app:layout_constraintTop_toBottomOf="@id/dividerTitle">
 
@@ -86,10 +86,10 @@
             android:layout_height="wrap_content"
             android:gravity="center"
             android:orientation="vertical"
+            android:padding="4dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            android:padding="4dp">
+            app:layout_constraintTop_toTopOf="parent">
 
             <ImageView
                 android:id="@+id/iconNotification"

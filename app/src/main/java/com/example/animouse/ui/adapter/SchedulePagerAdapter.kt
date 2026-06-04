@@ -6,9 +6,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.animouse.data.model.Anime
 
 class SchedulePagerAdapter(
-    private val daysData: List<List<Anime>>,
-    private val favoriteIds: MutableSet<Int>,
-    private val onFavoriteClick: (Int, Boolean) -> Unit
+    private val daysData: List<List<Anime>> // Оставили только сами данные
 ) : RecyclerView.Adapter<SchedulePagerAdapter.PageViewHolder>() {
 
     inner class PageViewHolder(val recyclerView: RecyclerView) : RecyclerView.ViewHolder(recyclerView)
@@ -25,8 +23,8 @@ class SchedulePagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        // --- ВОТ ЗДЕСЬ МЫ ЗАМЕНИЛИ AnimeAdapter НА ScheduleAnimeAdapter ---
-        holder.recyclerView.adapter = ScheduleAnimeAdapter(daysData[position], favoriteIds, onFavoriteClick)
+        // Передаем только список тайтлов для конкретного дня
+        holder.recyclerView.adapter = ScheduleAnimeAdapter(daysData[position])
     }
 
     override fun getItemCount(): Int = daysData.size

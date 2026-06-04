@@ -29,6 +29,32 @@
 
     </com.google.android.material.appbar.MaterialToolbar>
 
+    <LinearLayout
+        android:id="@+id/btnNotesHub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:background="@drawable/bg_bookmark"
+        android:clickable="true"
+        android:elevation="3dp"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="25dp"
+        android:paddingTop="15dp"
+        android:paddingBottom="15dp"
+        android:visibility="visible"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:layout_width="34dp"
+            android:layout_height="37dp"
+            android:src="@drawable/ic_pencil_square_sol"
+            app:tint="@color/bg_dark_deep" />
+
+    </LinearLayout>
+
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/layoutListsHeader"
         android:layout_width="0dp"
@@ -118,6 +144,18 @@
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
+            <TextView
+                android:id="@+id/btnCreateListFromHub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:paddingVertical="8dp"
+                android:text="+ Создать пользовательский список"
+                android:textColor="@color/turquoise_secondary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="?attr/selectableItemBackground" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -126,13 +164,14 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        app:tabIndicatorHeight="0dp"
-        app:tabRippleColor="@null"
         android:background="@color/bg_dark_deep"
-        app:tabMode="scrollable"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.59"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:tabIndicatorHeight="0dp"
+        app:tabMode="scrollable"
+        app:tabRippleColor="@null" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/layoutFilters"
@@ -222,17 +261,25 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:background="@drawable/bg_fade_bottom"
+        app:layout_constraintBottom_toTopOf="@id/bottomNavigation" />
+
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNavigation"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        app:menu="@menu/bottom_menu"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:itemIconTint="@color/nav_item_colors"
-        app:itemTextColor="@color/nav_item_colors"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@color/bg_dark_deep"
         app:itemActiveIndicatorStyle="@null"
-        app:itemRippleColor="@android:color/transparent"/>
+        app:itemIconTint="@color/nav_item_colors"
+        app:itemPaddingBottom="15dp"
+        app:itemPaddingTop="5dp"
+        app:itemRippleColor="@android:color/transparent"
+        app:itemTextColor="@color/nav_item_colors"
+        app:labelVisibilityMode="labeled"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:menu="@menu/bottom_menu" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -167,4 +167,73 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // --- 5. КАСТОМНЫЕ СПИСКИ (Локальная БД) ---
+    private val _allCustomLists = MutableLiveData<List<com.example.animouse.data.database.CustomListEntity>>()
+    val allCustomLists: LiveData<List<com.example.animouse.data.database.CustomListEntity>> = _allCustomLists
+
+    private val _activeCustomListIds = MutableLiveData<List<Int>>()
+    val activeCustomListIds: LiveData<List<Int>> = _activeCustomListIds
+
+    // Загружаем все списки и проверяем, в каких из них лежит наше аниме
+    fun loadCustomListsData(animeId: Int) {
+        viewModelScope.launch {
+            _allCustomLists.value = database.customListDao().getAllLists()
+            if (animeId != -1) {
+                val activeLists = database.customListDao().getListsForAnime(animeId)
+                _activeCustomListIds.value = activeLists.map { it.id }
+            }
+        }
+    }
+
+    fun createNewCustomList(name: String, colorHex: String, currentAnimeId: Int) {
+        viewModelScope.launch {
+            val newList = com.example.animouse.data.database.CustomListEntity(name = name, colorHex = colorHex)
+            database.customListDao().insertList(newList)
+            // Обновляем данные, чтобы список сразу появился в меню
+            loadCustomListsData(currentAnimeId)
+        }
+    }
+
+    // Умное добавление/удаление из кастомного списка с подстраховкой оффлайн-кэша
+    fun toggleAnimeInCustomList(
+        listId: Int, animeId: Int, idMal: Int, title: String, posterUrl: String?,
+        score: Int, epTotal: Int, epAired: Int, animeStatus: String?, isAdding: Boolean
+    ) {
+        viewModelScope.launch {
+            if (isAdding) {
+                // Если тайтла вообще нет в БД, сохраняем его со статусом null
+                val existing = database.userAnimeDao().getAnimeById(animeId)
+                if (existing == null) {
+                    val entity = com.example.animouse.data.database.UserAnimeEntity(
+                        animeId = animeId, idMal = idMal, status = null, title = title,
+                        posterUrl = posterUrl, score = score, episodesTotal = epTotal,
+                        episodesAired = epAired,
+                        animeStatus = animeStatus
+                    )
+                    database.userAnimeDao().insert(entity)
+                }
+                database.customListDao().addAnimeToList(
+                    com.example.animouse.data.database.AnimeCustomListCrossRef(
+                        animeId = animeId,
+                        listId = listId
+                    )
+                )
+            } else {
+                database.customListDao().removeAnimeFromList(
+                    com.example.animouse.data.database.AnimeCustomListCrossRef(
+                        animeId = animeId,
+                        listId = listId
+                    )
+                )
+                // Пытаемся удалить из кэша. Он удалится только если статус null и нет других кастомных списков
+                val current = database.userAnimeDao().getAnimeById(animeId)
+                if (current?.status == null) {
+                    database.userAnimeDao().deleteIfUnused(animeId)
+                }
+            }
+            // Перезагружаем галочки
+            loadCustomListsData(animeId)
+        }
+    }
+
 }

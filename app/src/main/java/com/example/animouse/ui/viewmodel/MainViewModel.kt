@@ -1,4 +1,4 @@
-package com.example.animouse
+package com.example.animouse.ui.activity
 
 import android.app.Application
 import android.util.Log
@@ -36,6 +36,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadData()
+        updateLocalStatuses() // <-- Загрузит кастомные списки и плашки прямо на старте!
     }
 
     private fun loadData() {
@@ -104,18 +105,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         setAnimeStatus(animeId, null)
     }
 
+    // Шпаргалка 1: ID кастомной папки -> Список аниме в ней (чтобы открывать папки)
+    private val _customFolderAnime = MutableLiveData<Map<Int, List<com.example.animouse.data.database.UserAnimeEntity>>>()
+    val customFolderAnime: LiveData<Map<Int, List<com.example.animouse.data.database.UserAnimeEntity>>> = _customFolderAnime
+
+    // Шпаргалка 2: ID аниме -> Превью кастомного списка (чтобы рисовать цветные плашки на карточках)
+// Меняем Map<Int, CustomFolderPreview> на Map<Int, List<CustomFolderPreview>>
+    private val _animeCustomBadges = MutableLiveData<Map<Int, List<CustomFolderPreview>>>()
+    val animeCustomBadges: LiveData<Map<Int, List<CustomFolderPreview>>> = _animeCustomBadges
+
     // Вспомогательный метод для обновления LiveData из базы
+// Вспомогательный метод для обновления LiveData из базы
+// Вспомогательный метод для обновления LiveData из базы
     fun updateLocalStatuses() {
         viewModelScope.launch {
-            // Получаем вообще все сохраненные тайтлы из базы
+            // 1. Получаем вообще все сохраненные тайтлы из базы
             val savedAnime = database.userAnimeDao().getAll()
 
-            // 1. Отдаем список локальных карточек в MainActivity
             _localAnime.value = savedAnime
 
-            // 2. Отдаем карту статусов (уже с исправленным фильтром null, который мы делали ранее)
             _animeStatuses.value = savedAnime.filter { it.status != null }
                 .associate { it.animeId to it.status!! }
+
+// 2. НОВОЕ: Собираем кастомные списки и генерируем превью для папок
+            val allCustomLists = database.customListDao().getAllLists()
+
+            val previews = mutableListOf<CustomFolderPreview>()
+            val folderAnimeMap = mutableMapOf<Int, List<com.example.animouse.data.database.UserAnimeEntity>>()
+            val badgeMap = mutableMapOf<Int, MutableList<CustomFolderPreview>>() // Теперь это список
+
+            for (customList in allCustomLists) {
+                val animeInList = database.customListDao().getAnimeInList(customList.id)
+                val preview = CustomFolderPreview(customList.id, customList.name, customList.colorHex, animeInList.size, animeInList.randomOrNull()?.posterUrl)
+
+                previews.add(preview)
+                folderAnimeMap[customList.id] = animeInList
+
+                // Добавляем плашку в список для конкретного аниме
+                animeInList.forEach { entity ->
+                    if (badgeMap[entity.animeId] == null) {
+                        badgeMap[entity.animeId] = mutableListOf()
+                    }
+                    badgeMap[entity.animeId]?.add(preview)
+                }
+            }
+
+            _customFolderPreviews.value = previews
+            _customFolderAnime.value = folderAnimeMap
+            _animeCustomBadges.value = badgeMap
         }
     }
 
@@ -123,6 +160,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshFavorites() {
         viewModelScope.launch {
             updateLocalStatuses() // Этот скрытый метод у нас уже есть в самом низу
+        }
+    }
+
+    // --- ДАННЫЕ ДЛЯ КАСТОМНЫХ ПАПОК ---
+    data class CustomFolderPreview(
+        val id: Int,
+        val name: String,
+        val colorHex: String,
+        val count: Int,
+        val randomPosterUrl: String?
+    )
+
+    private val _customFolderPreviews = MutableLiveData<List<CustomFolderPreview>>()
+    val customFolderPreviews: LiveData<List<CustomFolderPreview>> = _customFolderPreviews
+
+    fun deleteCustomList(listId: Int) {
+        viewModelScope.launch {
+            database.customListDao().deleteList(listId)
+            updateLocalStatuses() // Мгновенно перерисовываем папки на главном экране
+        }
+    }
+
+    fun updateCustomList(listId: Int, newName: String, newColorHex: String) {
+        viewModelScope.launch {
+            val updatedList = com.example.animouse.data.database.CustomListEntity(
+                id = listId, // Привязываемся к старому ID, чтобы обновить, а не создать новый
+                name = newName,
+                colorHex = newColorHex
+            )
+            database.customListDao().insertList(updatedList)
+            updateLocalStatuses()
         }
     }
 

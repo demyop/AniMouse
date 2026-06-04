@@ -14,6 +14,7 @@ import com.example.animouse.ui.activity.DetailsActivity
 class AnimeAdapter(
     private val animeList: List<Anime>,
     private val statuses: Map<Int, String>,
+    private val customBadges: Map<Int, List<com.example.animouse.ui.activity.MainViewModel.CustomFolderPreview>> = emptyMap(),
     private val onLongClick: (Anime, View) -> Unit
 ) : RecyclerView.Adapter<AnimeAdapter.AnimeViewHolder>() {
 
@@ -54,6 +55,44 @@ class AnimeAdapter(
                 }
             } else {
                 binding.badgeStatus.visibility = View.GONE
+            }
+
+            // ЛОГИКА ДЛЯ КАСТОМНОЙ ПЛАШКИ
+// ДИНАМИЧЕСКАЯ ОТРИСОВКА КАСТОМНЫХ ПЛАШЕК
+            val customBadgesList = customBadges[anime.id] ?: emptyList()
+            binding.layoutCustomBadges.removeAllViews() // Очищаем от старых (особенность RecyclerView)
+
+            if (customBadgesList.isNotEmpty()) {
+                binding.layoutCustomBadges.visibility = android.view.View.VISIBLE
+                val context = binding.root.context
+                val density = context.resources.displayMetrics.density
+
+                // Берем максимум 3 плашки, чтобы не закрыть всю обложку
+                // Убрали take(3), теперь генерируем все плашки!
+                for (badge in customBadgesList) {
+                    val badgeView = android.widget.TextView(context).apply {
+                        text = badge.name
+                        textSize = 10f
+                        setTextColor(androidx.core.content.ContextCompat.getColor(context, com.example.animouse.R.color.bg_dark_deep))
+                        typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        setPadding((6 * density).toInt(), (2 * density).toInt(), (6 * density).toInt(), (2 * density).toInt())
+
+                        // Берем наш красивый шейп и просто перекрашиваем его
+                        background = androidx.core.content.ContextCompat.getDrawable(context, com.example.animouse.R.drawable.bg_badge_turquoise)
+                        backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor(badge.colorHex))
+
+                        // Добавляем отступ справа, чтобы они не слипались
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            marginEnd = (4 * density).toInt()
+                        }
+                    }
+                    binding.layoutCustomBadges.addView(badgeView)
+                }
+            } else {
+                binding.layoutCustomBadges.visibility = android.view.View.GONE
             }
 
             // === 2. НОВАЯ ЛОГИКА: СТАТУС ВЫПУСКА (Онгоинг/Вышло) ===

@@ -13,6 +13,9 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE animeId = :animeId ORDER BY updatedAt DESC")
     suspend fun getNotesForAnime(animeId: Int): List<NoteEntity>
 
+    @Query("DELETE FROM notes WHERE id = :noteId")
+    suspend fun deleteById(noteId: Int)
+
     // Получить ВООБЩЕ ВСЕ заметки (пригодится для хаба на экране "Списки")
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC")
     suspend fun getAllNotes(): List<NoteEntity>
@@ -25,4 +28,15 @@ interface NoteDao {
 
     @Delete
     suspend fun delete(note: NoteEntity)
+
+    // Вытаскиваем все заметки и приклеиваем к ним название и постер из таблицы user_anime_list
+    @Query("""
+        SELECT n.id AS noteId, n.animeId, ua.idMal, n.content, n.createdAt, n.updatedAt, 
+               ua.title AS animeTitle, ua.posterUrl AS animePosterUrl
+        FROM notes n
+        INNER JOIN user_anime_list ua ON n.animeId = ua.animeId
+        ORDER BY n.updatedAt DESC
+    """)
+
+    suspend fun getAllNotesWithAnime(): List<NoteWithAnime>
 }

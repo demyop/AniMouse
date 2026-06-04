@@ -3,20 +3,20 @@ package com.example.animouse.ui.adapter
 import android.content.Intent
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.animouse.ui.activity.DetailsActivity
 import com.example.animouse.R
 import com.example.animouse.databinding.ItemAnimeScheduleBinding
 import com.example.animouse.data.model.Anime
+import com.example.animouse.data.NotificationHelper // Подключили наш менеджер
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class ScheduleAnimeAdapter(
-    private val animeList: List<Anime>,
-    private val savedIds: Set<Int>,
-    private val onBellClick: (Int, Boolean) -> Unit // Лямбда для клика по колокольчику
+    private val animeList: List<Anime> // <-- Убрали старые параметры, они больше не нужны!
 ) : RecyclerView.Adapter<ScheduleAnimeAdapter.ScheduleViewHolder>() {
 
     inner class ScheduleViewHolder(private val binding: ItemAnimeScheduleBinding) : RecyclerView.ViewHolder(binding.root) {
@@ -28,46 +28,54 @@ class ScheduleAnimeAdapter(
                 .load(anime.coverImage.large)
                 .into(binding.imagePoster)
 
-            // Конвертируем время выхода из timestamp в формат "ЧЧ:ММ"
+            // Конвертируем время выхода
             val airingAt = anime.nextAiringEpisode?.airingAt
             if (airingAt != null) {
                 val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-                val date = Date(airingAt * 1000L) // Умножаем на 1000, т.к. время в секундах
+                val date = Date(airingAt * 1000L)
                 binding.textTime.text = sdf.format(date)
             } else {
                 binding.textTime.text = "--:--"
             }
 
-            // Проверяем, есть ли тайтл в списках пользователя
-            val isSaved = savedIds.contains(anime.id)
-            if (isSaved) {
-                binding.iconNotification.setImageResource(R.drawable.ic_notification_bell_alarm_sol)
-                binding.iconNotification.setColorFilter(binding.root.context.getColor(R.color.orange_accent))
-            } else {
-                binding.iconNotification.setImageResource(R.drawable.ic_notification_bell_alarm_reg)
-                binding.iconNotification.setColorFilter(binding.root.context.getColor(R.color.text_secondary))
+            // === НОВАЯ ЛОГИКА УВЕДОМЛЕНИЙ ===
+            val context = binding.root.context
+
+            // Функция для покраски колокольчика
+            fun updateBellUI(isActive: Boolean) {
+                if (isActive) {
+                    binding.iconNotification.setImageResource(R.drawable.ic_notification_bell_alarm_sol)
+                    binding.iconNotification.setColorFilter(context.getColor(R.color.orange_accent))
+                } else {
+                    binding.iconNotification.setImageResource(R.drawable.ic_notification_bell_alarm_reg)
+                    binding.iconNotification.setColorFilter(context.getColor(R.color.text_secondary))
+                }
             }
 
-            // Обработка клика по колокольчику (добавление/удаление из списков)
+            // Читаем текущий статус при отрисовке карточки
+            val isNotifying = NotificationHelper.isNotificationEnabled(context, anime.id)
+            updateBellUI(isNotifying)
+
+            // Обработка клика по колокольчику
             binding.iconNotification.setOnClickListener {
-                onBellClick(anime.id, !isSaved)
+                val newState = NotificationHelper.toggleNotification(context, anime.id)
+                updateBellUI(newState) // Мгновенно перерисовываем
+
+                val msg = if (newState) "Уведомления включены" else "Уведомления выключены"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             }
 
-            // Обработка клика по самой карточке (переход на экран деталей)
-            // Обычный клик для перехода на экран деталей
+            // Переход на экран деталей
             binding.root.setOnClickListener {
-                val context = binding.root.context
                 val intent = Intent(context, DetailsActivity::class.java).apply {
                     putExtra("EXTRA_ID", anime.id)
                     putExtra("EXTRA_ID_MAL", anime.idMal ?: -1)
                     putExtra("EXTRA_TITLE", anime.title.romaji)
                     putExtra("EXTRA_POSTER", anime.coverImage.large)
                     putExtra("EXTRA_SCORE", anime.averageScore ?: 0)
-
-                    // ДОБАВЛЯЕМ НОВЫЕ ДАННЫЕ ДЛЯ ПОДСТРАХОВКИ:
-                    putExtra("EXTRA_DESC_ENG", anime.description) // Английский синопсис
-                    putExtra("EXTRA_EPISODES_TOTAL", anime.episodes ?: 0) // Всего серий по версии AniList
-                    putStringArrayListExtra("EXTRA_GENRES", ArrayList(anime.genres ?: emptyList())) // Жанры/теги
+                    putExtra("EXTRA_DESC_ENG", anime.description)
+                    putExtra("EXTRA_EPISODES_TOTAL", anime.episodes ?: 0)
+                    putStringArrayListExtra("EXTRA_GENRES", ArrayList(anime.genres ?: emptyList()))
                 }
                 context.startActivity(intent)
             }

@@ -10,4 +10,7 @@
     <color name="black">#000000</color>
     <color name="white">#FFFFFF</color>
     <color name="green_accent">#22C55E</color>
+    <color name="purple_accent">#A422C5</color>
+    <color name="red_accent">#EF4444</color>
+    <color name="blue_accent">#3B82F6</color>
 </resources>

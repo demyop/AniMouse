@@ -56,17 +56,84 @@ class DetailsActivity : AppCompatActivity() {
         // --- НОВЫЕ КНОПКИ ВЕРХНЕЙ ПАНЕЛИ ---
         binding.btnBack.setOnClickListener { finish() }
 
-        binding.btnMenuOptions.setOnClickListener {
-            Toast.makeText(this, "Настройки уведомлений и Поделиться", Toast.LENGTH_SHORT).show()
+        binding.btnMenuOptions.setOnClickListener { view ->
+            val popup = android.widget.PopupMenu(this, view)
+
+            // Проверяем текущий статус колокольчика для текста меню
+            val isNotifying = com.example.animouse.data.NotificationHelper.isNotificationEnabled(this, currentAnimeId)
+            val bellText = if (isNotifying) "🔕 Выключить уведомления" else "🔔 Уведомлять о новых сериях"
+
+            popup.menu.add(0, 1, 0, bellText)
+            popup.menu.add(0, 2, 0, "📤 Поделиться")
+            popup.menu.add(0, 3, 0, "📅 Добавить в Google Календарь")
+
+            popup.setOnMenuItemClickListener { menuItem ->
+                when (menuItem.itemId) {
+                    1 -> {
+                        // 1. УВЕДОМЛЕНИЯ
+                        val newState = com.example.animouse.data.NotificationHelper.toggleNotification(this, currentAnimeId)
+                        val msg = if (newState) "Уведомления включены!" else "Уведомления выключены"
+                        android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                    2 -> {
+                        // 2. ПОДЕЛИТЬСЯ
+                        val shareIntent = android.content.Intent().apply {
+                            action = android.content.Intent.ACTION_SEND
+                            putExtra(android.content.Intent.EXTRA_TEXT, "Смотрю аниме «$title» в приложении AniMouse! Присоединяйся!")
+                            type = "text/plain"
+                        }
+                        startActivity(android.content.Intent.createChooser(shareIntent, "Поделиться тайтлом"))
+                        true
+                    }
+                    3 -> {
+                        // 3. В GOOGLE КАЛЕНДАРЬ
+                        val extraData = viewModel.aniListExtra.value
+                        val nextEp = extraData?.nextAiringEpisode
+
+                        // Пуленепробиваемый метод: сразу конвертируем в Long, а если там null — ставим 0L
+                        val airingTime: Long = nextEp?.airingAt?.toLong() ?: 0L
+
+                        // Теперь airingTime это 100% обычное число, IDE будет счастлива
+                        if (nextEp != null && airingTime > 0L) {
+                            val beginTime = airingTime * 1000L
+
+                            val calendarIntent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
+                                data = android.provider.CalendarContract.Events.CONTENT_URI
+                                putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, beginTime)
+                                putExtra(android.provider.CalendarContract.Events.TITLE, "Выход ${nextEp.episode} серии «$title»")
+                                putExtra(android.provider.CalendarContract.Events.DESCRIPTION, "Напоминание о релизе новой серии от AniMouse")
+                                putExtra(android.provider.CalendarContract.Events.EVENT_LOCATION, "AniMouse App")
+                            }
+                            startActivity(calendarIntent)
+                        } else {
+                            android.widget.Toast.makeText(this, "Дата выхода неизвестна", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            }
+            popup.show()
         }
 
         // --- НОВАЯ ЛЕНТА ТЕГОВ ---
+        // Первичная отрисовка без кастомных списков
         setupTags(genres, animeId)
+
+        // Как только база данных понимает, в каких списках состоит тайтл — перерисовываем теги!
+        viewModel.activeCustomListIds.observe(this) { activeIds ->
+            val allLists = viewModel.allCustomLists.value ?: emptyList()
+            // Отфильтровываем только те списки, в которых есть текущее аниме
+            val activeLists = allLists.filter { activeIds.contains(it.id) }
+            setupTags(genres, animeId, activeLists)
+        }
 
         // 3. Стартовая загрузка
         if (currentAnimeId != -1) {
             viewModel.loadStatus(currentAnimeId)
             viewModel.loadNotes(currentAnimeId)
+            viewModel.loadCustomListsData(currentAnimeId)
         }
         viewModel.loadAnimeDetails(idMal)
         viewModel.loadAniListExtra(currentAnimeId, idMal)
@@ -213,10 +280,10 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     // Динамически создаем красивые плашки-теги
-    private fun setupTags(genres: List<String>, animeId: Int) {
+    private fun setupTags(genres: List<String>, animeId: Int, customLists: List<com.example.animouse.data.database.CustomListEntity> = emptyList()) {
         binding.chipGroupTags.removeAllViews()
 
-        // Сначала добавляем серенький ID
+        // 1. Серенький ID
         val idChip = com.google.android.material.chip.Chip(this).apply {
             text = "ID: $animeId"
             setChipBackgroundColorResource(R.color.bg_dark_card)
@@ -226,16 +293,29 @@ class DetailsActivity : AppCompatActivity() {
         }
         binding.chipGroupTags.addView(idChip)
 
-        // Затем добавляем каждый жанр с иконкой
+        // 2. КАСТОМНЫЕ СПИСКИ (Цветные теги)
+        for (list in customLists) {
+            val customChip = com.google.android.material.chip.Chip(this).apply {
+                text = list.name
+                val parsedColor = android.graphics.Color.parseColor(list.colorHex)
+                setChipBackgroundColor(android.content.res.ColorStateList.valueOf(parsedColor))
+                setTextColor(getColor(R.color.bg_dark_deep)) // Темный текст для контраста
+                isClickable = false
+                chipStrokeWidth = 0f
+            }
+            binding.chipGroupTags.addView(customChip)
+        }
+
+        // 3. Стандартные жанры
         for (genre in genres) {
             val chip = com.google.android.material.chip.Chip(this).apply {
                 text = genre
                 setChipBackgroundColorResource(R.color.bg_dark_card)
                 setTextColor(getColor(R.color.text_primary))
-                setChipIconResource(R.drawable.ic_tag_reg) // Иконка тега!
+                setChipIconResource(R.drawable.ic_tag_reg)
                 chipIconTint = android.content.res.ColorStateList.valueOf(getColor(R.color.turquoise_secondary))
                 iconStartPadding = 8f
-                chipIconSize = 40f // Размер иконки
+                chipIconSize = 40f
                 isClickable = false
                 chipStrokeWidth = 0f
             }
@@ -245,32 +325,20 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun showBottomSheetDialog(animeId: Int, idMal: Int, title: String, posterUrl: String?, score: Int, epTotalAniList: Int) {
         try {
-            val bottomSheetDialog = BottomSheetDialog(this)
+            val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_status, null)
             bottomSheetDialog.setContentView(sheetView)
 
             val titleView = sheetView.findViewById<android.widget.TextView>(R.id.textSheetTitle)
             titleView.text = title
 
-            // Достаем актуальные данные по эпизодам и статусу выхода из Шикимори
             val currentDetails = viewModel.animeDetails.value
             val epAired = currentDetails?.episodes_aired ?: 0
             val epTotal = if (epTotalAniList > 0) epTotalAniList else (currentDetails?.episodes ?: 0)
             val animeReleaseStatus = currentDetails?.status
 
-            // Функция-помощник, чтобы не дублировать код
             fun saveWithStatus(newStatus: String?) {
-                viewModel.updateStatus(
-                    animeId = animeId,
-                    idMal = idMal,
-                    newStatus = newStatus,
-                    title = title,
-                    posterUrl = posterUrl,
-                    score = score,
-                    epTotal = epTotal,
-                    epAired = epAired,
-                    animeStatus = animeReleaseStatus
-                )
+                viewModel.updateStatus(animeId, idMal, newStatus, title, posterUrl, score, epTotal, epAired, animeReleaseStatus)
                 bottomSheetDialog.dismiss()
             }
 
@@ -280,9 +348,67 @@ class DetailsActivity : AppCompatActivity() {
             sheetView.findViewById<View>(R.id.btnDropped).setOnClickListener { saveWithStatus("DROPPED") }
             sheetView.findViewById<View>(R.id.btnRemove).setOnClickListener { saveWithStatus(null) }
 
+            sheetView.findViewById<View>(R.id.btnCreateCustomList).setOnClickListener {
+                bottomSheetDialog.dismiss()
+                showCreateListDialog(animeId)
+            }
+
+            // === ДИНАМИЧЕСКАЯ ОТРИСОВКА КАСТОМНЫХ СПИСКОВ ===
+            val container = sheetView.findViewById<android.widget.LinearLayout>(R.id.layoutCustomListsContainer)
+
+            // Наблюдаем за списками и перерисовываем контейнер при изменениях
+            viewModel.allCustomLists.observe(this) { allLists ->
+                val activeIds = viewModel.activeCustomListIds.value ?: emptyList()
+                container.removeAllViews()
+
+                for (list in allLists) {
+                    val itemView = layoutInflater.inflate(R.layout.item_custom_list_option, container, false)
+                    val indicator = itemView.findViewById<View>(R.id.indicatorListColor)
+                    val textName = itemView.findViewById<android.widget.TextView>(R.id.textCustomListName)
+                    val iconCheck = itemView.findViewById<android.widget.ImageView>(R.id.iconCheck)
+
+                    textName.text = list.name
+                    // Парсим выбранный цвет
+                    val parsedColor = android.graphics.Color.parseColor(list.colorHex)
+
+                    // Раскрашиваем кружок (если у тебя там ShapeDrawable, меняем tint)
+                    indicator.backgroundTintList = android.content.res.ColorStateList.valueOf(parsedColor)
+
+                    val isAlreadyInList = activeIds.contains(list.id)
+
+                    if (isAlreadyInList) {
+                        iconCheck.visibility = android.view.View.VISIBLE
+                        iconCheck.imageTintList = android.content.res.ColorStateList.valueOf(parsedColor)
+                        textName.setTextColor(parsedColor)
+                    } else {
+                        iconCheck.visibility = android.view.View.GONE
+                        textName.setTextColor(getColor(R.color.text_primary))
+                    }
+
+                    // Логика добавления/удаления по клику с предупреждением
+                    itemView.setOnClickListener {
+                        if (isAlreadyInList) {
+                            // Предупреждение при удалении
+                            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                                .setTitle("Удалить из списка?")
+                                .setMessage("Вы уверены, что хотите убрать тайтл из списка «${list.name}»?")
+                                .setPositiveButton("Удалить") { _, _ ->
+                                    viewModel.toggleAnimeInCustomList(list.id, animeId, idMal, title, posterUrl, score, epTotal, epAired, animeReleaseStatus, false)
+                                }
+                                .setNegativeButton("Отмена", null)
+                                .show()
+                        } else {
+                            // Добавление без предупреждения
+                            viewModel.toggleAnimeInCustomList(list.id, animeId, idMal, title, posterUrl, score, epTotal, epAired, animeReleaseStatus, true)
+                        }
+                    }
+                    container.addView(itemView)
+                }
+            }
+
             bottomSheetDialog.show()
         } catch (e: Exception) {
-            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, "Ошибка: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -338,6 +464,61 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         bottomSheetDialog.show()
+    }
+
+    private fun showCreateListDialog(currentAnimeId: Int) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_create_list, null)
+        val alertDialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setView(dialogView)
+            .setBackground(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            .create()
+
+        val inputName = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.inputListName)
+        val viewPreview = dialogView.findViewById<View>(R.id.viewColorPreview)
+        val textHex = dialogView.findViewById<android.widget.TextView>(R.id.textColorHex)
+
+        // Наши новые ползунки
+        val seekRed = dialogView.findViewById<android.widget.SeekBar>(R.id.seekRed)
+        val seekGreen = dialogView.findViewById<android.widget.SeekBar>(R.id.seekGreen)
+        val seekBlue = dialogView.findViewById<android.widget.SeekBar>(R.id.seekBlue)
+
+        // Логика динамического изменения цвета (как на главном экране)
+        val rgbListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                val r = seekRed.progress
+                val g = seekGreen.progress
+                val b = seekBlue.progress
+                val computedColor = android.graphics.Color.rgb(r, g, b)
+
+                viewPreview.backgroundTintList = android.content.res.ColorStateList.valueOf(computedColor)
+                textHex.text = String.format("#%02X%02X%02X", r, g, b)
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        }
+
+        seekRed.setOnSeekBarChangeListener(rgbListener)
+        seekGreen.setOnSeekBarChangeListener(rgbListener)
+        seekBlue.setOnSeekBarChangeListener(rgbListener)
+
+        dialogView.findViewById<View>(R.id.btnCancelList).setOnClickListener { alertDialog.dismiss() }
+
+        dialogView.findViewById<View>(R.id.btnSaveList).setOnClickListener {
+            val listName = inputName.text.toString().trim()
+            val hex = textHex.text.toString()
+
+            if (listName.isNotEmpty()) {
+                // Сохраняем с новым HEX-цветом
+                viewModel.createNewCustomList(listName, hex, currentAnimeId)
+
+                android.widget.Toast.makeText(this, "Список '$listName' создан!", android.widget.Toast.LENGTH_SHORT).show()
+                alertDialog.dismiss()
+            } else {
+                inputName.error = "Введите название"
+            }
+        }
+
+        alertDialog.show()
     }
 
 }

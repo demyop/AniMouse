@@ -26,6 +26,9 @@
             android:name=".ui.activity.SearchActivity"
             android:windowSoftInputMode="stateVisible|adjustPan"
             android:exported="false" />
+        <activity
+            android:name=".ui.activity.NotesHubActivity"
+            android:exported="false" />
     </application>
 
 </manifest>

@@ -8,4 +8,5 @@ import androidx.room.RoomDatabase
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userAnimeDao(): UserAnimeDao
     abstract fun noteDao(): NoteDao // Добавили доступ к заметкам
+    abstract fun customListDao(): CustomListDao
 }

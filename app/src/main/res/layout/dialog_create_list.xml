@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/bg_bottom_sheet">
+
+    <TextView
+        android:id="@+id/textDialogTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Новый список"
+        android:textColor="@color/text_primary"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:hintTextColor="@color/turquoise_secondary"
+        app:boxStrokeColor="@color/turquoise_secondary"
+        android:layout_marginBottom="16dp">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/inputListName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Название списка"
+            android:inputType="textCapSentences"
+            android:textColor="@color/text_primary"
+            android:maxLines="1"/>
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <View
+            android:id="@+id/viewColorPreview"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:background="@drawable/bg_badge_turquoise"
+            android:backgroundTint="@color/turquoise_secondary" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Кастомный цвет тега:"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/textColorHex"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="#14B8A6"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Красный (R)" android:textColor="#EF4444" android:textSize="11sp" android:textStyle="bold"/>
+    <SeekBar android:id="@+id/seekRed" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="255" android:progress="20" android:thumbTint="#EF4444" android:progressTint="#EF4444" android:layout_marginBottom="8dp"/>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Зеленый (G)" android:textColor="#10B981" android:textSize="11sp" android:textStyle="bold"/>
+    <SeekBar android:id="@+id/seekGreen" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="255" android:progress="184" android:thumbTint="#10B981" android:progressTint="#10B981" android:layout_marginBottom="8dp"/>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Синий (B)" android:textColor="#3B82F6" android:textSize="11sp" android:textStyle="bold"/>
+    <SeekBar android:id="@+id/seekBlue" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="255" android:progress="166" android:thumbTint="#3B82F6" android:progressTint="#3B82F6" android:layout_marginBottom="24dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <TextView
+            android:id="@+id/btnCancelList"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ОТМЕНА"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:padding="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/btnSaveList"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="СОХРАНИТЬ"
+            android:textColor="@color/turquoise_secondary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:padding="12dp"
+            android:background="?attr/selectableItemBackground" />
+    </LinearLayout>
+</LinearLayout>
