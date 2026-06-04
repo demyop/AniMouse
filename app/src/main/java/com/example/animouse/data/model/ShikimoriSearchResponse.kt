@@ -9,7 +9,8 @@ data class ShikimoriSearchResult(
     val episodes: Int,
     val episodes_aired: Int,
     val status: String?, // <-- ДОБАВИЛИ СТАТУС В ПОИСКЕ
-    val image: ShikimoriImage?
+    val image: ShikimoriImage?,
+    val aired_on: String?
 )
 
 data class ShikimoriImage(

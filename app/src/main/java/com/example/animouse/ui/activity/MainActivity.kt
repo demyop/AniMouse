@@ -23,6 +23,17 @@ import java.util.Calendar
 
 class MainActivity : AppCompatActivity() {
 
+    // Запрос разрешения на уведомления для Android 13+
+    private val requestPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            android.widget.Toast.makeText(this, "Уведомления разрешены!", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            android.widget.Toast.makeText(this, "Без разрешения МЫш не сможет напоминать о сериях", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var viewModel: MainViewModel
     private var tabLayoutMediator: TabLayoutMediator? = null
@@ -42,6 +53,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel = ViewModelProvider(this)[MainViewModel::class.java]
+
+        // Проверяем и запрашиваем права на уведомления
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
 
         binding.toolbar.title = "AniMouse | Календарь аниме"
         binding.recyclerAnime.layoutManager = GridLayoutManager(this, 2)
@@ -187,8 +205,8 @@ class MainActivity : AppCompatActivity() {
             localAnimeList.filter { it.status == statusId }.map { mapEntityToAnime(it) }
         }
 
-// Прячем кастомные плашки внутри папок, передавая emptyMap()
-        binding.recyclerAnime.adapter = AnimeAdapter(folderAnime, statuses, emptyMap()) { anime, _ ->
+// Передаем emptyMap() вторым (чтобы скрыть статус папки), а customBadges - третьим (чтобы вернуть цветные теги)
+        binding.recyclerAnime.adapter = AnimeAdapter(folderAnime, emptyMap(), customBadges) { anime, _ ->
             showBottomSheetDialog(anime)
         }
     }
@@ -200,6 +218,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // --- ВЫНЕСЕННОЕ МЕНЮ BOTTOM SHEET ---
+// --- ВЫНЕСЕННОЕ МЕНЮ BOTTOM SHEET ---
     private fun showBottomSheetDialog(anime: Anime) {
         try {
             val bottomSheetDialog = BottomSheetDialog(this@MainActivity)
@@ -228,6 +247,81 @@ class MainActivity : AppCompatActivity() {
             sheetView.findViewById<View>(R.id.btnRemove).setOnClickListener {
                 viewModel.removeAnimeFromLists(anime.id)
                 bottomSheetDialog.dismiss()
+            }
+
+            sheetView.findViewById<View>(R.id.btnCreateCustomList).setOnClickListener {
+                bottomSheetDialog.dismiss()
+                showCustomListManageDialog()
+            }
+
+            // === КРАСИВАЯ ОТРИСОВКА КАСТОМНЫХ СПИСКОВ (КАК В DETAILS) ===
+            val container = sheetView.findViewById<android.widget.LinearLayout>(R.id.layoutCustomListsContainer)
+            container.removeAllViews()
+
+            val customLists = viewModel.customFolderPreviews.value ?: emptyList()
+            val customAnimeMap = viewModel.customFolderAnime.value ?: emptyMap()
+
+            if (customLists.isEmpty()) {
+                val emptyText = android.widget.TextView(this@MainActivity).apply {
+                    text = "Нет созданных списков"
+                    setTextColor(getColor(R.color.text_secondary))
+                    setPadding(0, 8, 0, 8)
+                }
+                container.addView(emptyText)
+            } else {
+                for (listPreview in customLists) {
+                    val itemView = layoutInflater.inflate(R.layout.item_custom_list_option, container, false)
+                    val indicator = itemView.findViewById<View>(R.id.indicatorListColor)
+                    val textName = itemView.findViewById<android.widget.TextView>(R.id.textCustomListName)
+                    val iconCheck = itemView.findViewById<android.widget.ImageView>(R.id.iconCheck)
+
+                    textName.text = listPreview.name
+                    val parsedColor = android.graphics.Color.parseColor(listPreview.colorHex)
+                    indicator.backgroundTintList = android.content.res.ColorStateList.valueOf(parsedColor)
+
+                    // Проверяем, есть ли уже аниме в этом списке
+                    val isAlreadyInList = customAnimeMap[listPreview.id]?.any { it.animeId == anime.id } == true
+
+                    if (isAlreadyInList) {
+                        iconCheck.visibility = android.view.View.VISIBLE
+                        iconCheck.imageTintList = android.content.res.ColorStateList.valueOf(parsedColor)
+                        textName.setTextColor(parsedColor)
+                    } else {
+                        iconCheck.visibility = android.view.View.GONE
+                        textName.setTextColor(getColor(R.color.text_primary))
+                    }
+
+                    // Обработка клика по всему пункту списка
+                    itemView.setOnClickListener {
+
+                        // Локальная функция для записи в БД
+                        fun updateCustomListDB(isAdding: Boolean) {
+                            kotlinx.coroutines.MainScope().launch(kotlinx.coroutines.Dispatchers.IO) {
+                                val db = androidx.room.Room.databaseBuilder(applicationContext, com.example.animouse.data.database.AppDatabase::class.java, "animouse_db").build()
+                                val crossRef = com.example.animouse.data.database.AnimeCustomListCrossRef(anime.id, listPreview.id)
+                                if (isAdding) db.customListDao().addAnimeToList(crossRef)
+                                else db.customListDao().removeAnimeFromList(crossRef)
+                                viewModel.updateLocalStatuses()
+                            }
+                        }
+
+                        if (isAlreadyInList) {
+                            com.google.android.material.dialog.MaterialAlertDialogBuilder(this@MainActivity)
+                                .setTitle("Удалить из списка?")
+                                .setMessage("Вы уверены, что хотите убрать тайтл из списка «${listPreview.name}»?")
+                                .setPositiveButton("Удалить") { _, _ ->
+                                    updateCustomListDB(false)
+                                    bottomSheetDialog.dismiss()
+                                }
+                                .setNegativeButton("Отмена", null)
+                                .show()
+                        } else {
+                            updateCustomListDB(true)
+                            bottomSheetDialog.dismiss()
+                        }
+                    }
+                    container.addView(itemView)
+                }
             }
 
             bottomSheetDialog.show()
@@ -275,7 +369,6 @@ class MainActivity : AppCompatActivity() {
                 isCorrectDay && passFilter
             }.sortedBy { it.nextAiringEpisode?.airingAt }
         }
-
         val currentItem = binding.viewPager.currentItem
 
 // Теперь адаптер сам разбирается с колокольчиками, передаем ему только список аниме!
@@ -297,6 +390,12 @@ class MainActivity : AppCompatActivity() {
         } else {
             binding.viewPager.setCurrentItem(currentItem, false)
         }
+
+        // 1. Сначала достаем теги из ВьюМодели
+        val customBadges = viewModel.animeCustomBadges.value ?: emptyMap()
+
+        // 2. Обязательно передаем их вторым параметром в SchedulePagerAdapter!
+        binding.viewPager.adapter = SchedulePagerAdapter(groupedAnime, customBadges)
     }
 
     private fun showAnime(animeList: List<Anime>, savedIds: Set<Int>) {
@@ -440,33 +539,56 @@ class MainActivity : AppCompatActivity() {
                 openFolder(folderId, title)
             },
             onFolderLongClick = { folderId ->
-                // Системные папки трогать нельзя
-                if (folderId == "WATCHING" || folderId == "PLANNED" || folderId == "COMPLETED" || folderId == "DROPPED" || folderId == "separator") return@ListsFolderAdapter
+                // Разделитель не трогаем
+                if (folderId == "separator") return@ListsFolderAdapter
 
-                val listId = folderId.removePrefix("custom_").toIntOrNull() ?: return@ListsFolderAdapter
-                val currentFolder = customPreviews.find { it.id == listId } ?: return@ListsFolderAdapter
+                val title = allFolders.find { it.id == folderId }?.title ?: "Список"
 
-                // Показываем микро-меню выбора действий
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                    .setTitle("Управление списком")
-                    .setMessage("Что вы хотите сделать со списком «${currentFolder.name}»?")
-                    .setPositiveButton("Редактировать") { _, _ ->
-                        showCustomListManageDialog(currentFolder.id, currentFolder.name, currentFolder.colorHex)
-                    }
-                    .setNegativeButton("Удалить") { _, _ ->
-                        // Подтверждение удаления
-                        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                            .setTitle("Удалить полностью?")
-                            .setMessage("Вы уверены? Сам список удалится, но тайтлы останутся в общей базе.")
-                            .setPositiveButton("Да, удалить") { _, _ ->
-                                viewModel.deleteCustomList(currentFolder.id)
-                                Toast.makeText(this, "Список удален", Toast.LENGTH_SHORT).show()
-                            }
-                            .setNegativeButton("Отмена", null)
-                            .show()
-                    }
-                    .setNeutralButton("Отмена", null)
-                    .show()
+                // Достаем список аниме для любой папки (и кастомной, и системной)
+                val animeListToShare = if (folderId.startsWith("custom_")) {
+                    val listId = folderId.removePrefix("custom_").toInt()
+                    viewModel.customFolderAnime.value?.get(listId) ?: emptyList()
+                } else {
+                    val statuses = viewModel.animeStatuses.value ?: emptyMap()
+                    viewModel.localAnime.value?.filter { statuses[it.animeId] == folderId } ?: emptyList()
+                }
+
+                if (folderId.startsWith("custom_")) {
+                    val listId = folderId.removePrefix("custom_").toInt()
+                    val currentFolder = customPreviews.find { it.id == listId } ?: return@ListsFolderAdapter
+
+                    // 1. МЕНЮ ДЛЯ КАСТОМНЫХ СПИСКОВ (Все 3 действия)
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                        .setTitle("Управление списком")
+                        .setMessage("Что вы хотите сделать со списком «${currentFolder.name}»?")
+                        .setPositiveButton("Поделиться") { _, _ ->
+                            shareList(currentFolder.name, animeListToShare)
+                        }
+                        .setNeutralButton("Редактировать") { _, _ ->
+                            showCustomListManageDialog(currentFolder.id, currentFolder.name, currentFolder.colorHex)
+                        }
+                        .setNegativeButton("Удалить") { _, _ ->
+                            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                                .setTitle("Удалить полностью?")
+                                .setMessage("Вы уверены? Сам список удалится, но тайтлы останутся в общей базе.")
+                                .setPositiveButton("Да, удалить") { _, _ ->
+                                    viewModel.deleteCustomList(currentFolder.id)
+                                    Toast.makeText(this, "Список удален", Toast.LENGTH_SHORT).show()
+                                }
+                                .setNegativeButton("Отмена", null)
+                                .show()
+                        }
+                        .show()
+                } else {
+                    // 2. МЕНЮ ДЛЯ СИСТЕМНЫХ СПИСКОВ (Только шаринг)
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                        .setTitle("Системный список: $title")
+                        .setMessage("Это базовый список. Его нельзя удалить или переименовать, но вы можете отправить его друзьям!")
+                        .setPositiveButton("Поделиться") { _, _ ->
+                            shareList(title, animeListToShare)
+                        }
+                        .show()
+                }
             }
         )
     }
@@ -509,15 +631,15 @@ class MainActivity : AppCompatActivity() {
             title = com.example.animouse.data.model.Title(romaji = entity.title),
             coverImage = com.example.animouse.data.model.CoverImage(large = entity.posterUrl ?: ""),
             averageScore = entity.score,
-
-            // 1. Берем общее количество из Шикимори (которое мы сохранили в БД)
             episodes = entity.episodesTotal,
             description = "Данные из оффлайн-списка",
             genres = emptyList(),
-            status = entity.animeStatus,
 
-            // 2. Имитируем ответ AniList, чтобы твой адаптер смог прочитать вышедшие серии
-            // (Адаптеры обычно берут nextAiringEpisode.episode - 1 для расчета текущей серии)
+            // Читаем твои поля из базы:
+            status = entity.animeStatus, // <-- ВОТ ТАК ПРАВИЛЬНО! Здесь хранится "FINISHED" или "RELEASING"
+            season = entity.season,
+            seasonYear = entity.seasonYear,
+
             nextAiringEpisode = com.example.animouse.data.model.NextAiringEpisode(
                 airingAt = 0,
                 timeUntilAiring = 0,
@@ -602,6 +724,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
         alertDialog.show()
+    }
+
+    private fun shareList(listName: String, animeList: List<com.example.animouse.data.database.UserAnimeEntity>) {
+        if (animeList.isEmpty()) {
+            Toast.makeText(this, "Этот список пока пуст!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val sb = java.lang.StringBuilder("Название списка: $listName\n\n")
+        animeList.forEachIndexed { index, anime ->
+            sb.append("${index + 1}. ${anime.title} - https://shikimori.one/animes/${anime.idMal}\n")
+        }
+        sb.append("\nСписок подготовлен в приложении AniMouse ₍ᐢ•͈༝•͈ᐢ₎♡ ")
+
+        val shareIntent = android.content.Intent().apply {
+            action = android.content.Intent.ACTION_SEND
+            putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
+            type = "text/plain"
+        }
+        startActivity(android.content.Intent.createChooser(shareIntent, "Поделиться списком"))
     }
 
 }

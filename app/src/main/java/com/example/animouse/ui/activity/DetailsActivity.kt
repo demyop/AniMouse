@@ -1,10 +1,13 @@
 package com.example.animouse.ui.activity
 
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.Html
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.ViewModelProvider
 import com.bumptech.glide.Glide
 import com.example.animouse.R
@@ -38,7 +41,7 @@ class DetailsActivity : AppCompatActivity() {
         var currentAnimeId = intent.getIntExtra("EXTRA_ID", -1)
         val idMal = intent.getIntExtra("EXTRA_ID_MAL", -1)
         val animeId = intent.getIntExtra("EXTRA_ID", -1)
-        val title = intent.getStringExtra("EXTRA_TITLE") ?: "Без названия"
+        var currentTitle = intent.getStringExtra("EXTRA_TITLE") ?: "Без названия"
         val posterUrl = intent.getStringExtra("EXTRA_POSTER")
         val score = intent.getIntExtra("EXTRA_SCORE", 0)
 
@@ -59,55 +62,87 @@ class DetailsActivity : AppCompatActivity() {
         binding.btnMenuOptions.setOnClickListener { view ->
             val popup = android.widget.PopupMenu(this, view)
 
-            // Проверяем текущий статус колокольчика для текста меню
-            val isNotifying = com.example.animouse.data.NotificationHelper.isNotificationEnabled(this, currentAnimeId)
-            val bellText = if (isNotifying) "🔕 Выключить уведомления" else "🔔 Уведомлять о новых сериях"
+            // Включаем принудительное отображение иконок (Работает на Android 10+)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                popup.setForceShowIcon(true)
+            }
 
-            popup.menu.add(0, 1, 0, bellText)
-            popup.menu.add(0, 2, 0, "📤 Поделиться")
-            popup.menu.add(0, 3, 0, "📅 Добавить в Google Календарь")
+            val shikiDetails = viewModel.animeDetails.value
+            val extraData = viewModel.aniListExtra.value
+            val nextEp = extraData?.nextAiringEpisode
+
+            val isNotifying = com.example.animouse.data.NotificationHelper.isNotificationEnabled(this, currentAnimeId)
+            // 1. Получаем цвет
+            val orangeColor = androidx.core.content.ContextCompat.getColor(this, R.color.orange_accent_dark) // Убедись, что цвет называется именно так в твоем colors.xml
+
+            // 2. Функция для покраски (теперь скобка закрыта!)
+            fun tintIcon(resId: Int): android.graphics.drawable.Drawable? {
+                val drawable = androidx.core.content.ContextCompat.getDrawable(this, resId)?.mutate()
+                drawable?.let { androidx.core.graphics.drawable.DrawableCompat.setTint(it, orangeColor) }
+                return drawable
+            }
+
+            // 3. Убираем эмодзи из текста и задаем иконки
+            val bellText = if (isNotifying) "Выключить уведомления" else "Напоминать о сериях"
+            val bellIcon = if (isNotifying) R.drawable.ic_notification_bell_off_sol else R.drawable.ic_notification_bell_alarm_sol
+
+            // 4. Цепляем иконки к пунктам меню (ПРОПУСКАЕМ ИХ ЧЕРЕЗ ФУНКЦИЮ tintIcon!)
+            popup.menu.add(0, 1, 0, bellText).icon = tintIcon(bellIcon)
+            popup.menu.add(0, 2, 0, "Поделиться ссылкой").icon = tintIcon(R.drawable.ic_share_network_sol)
+            popup.menu.add(0, 3, 0, "В Google Календарь").icon = tintIcon(R.drawable.ic_calendar_sol)
 
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     1 -> {
-                        // 1. УВЕДОМЛЕНИЯ
-                        val newState = com.example.animouse.data.NotificationHelper.toggleNotification(this, currentAnimeId)
-                        val msg = if (newState) "Уведомления включены!" else "Уведомления выключены"
+                        val airingAt = nextEp?.airingAt?.toLong() ?: 0L
+                        val episode = nextEp?.episode ?: 0
+
+                        val newState = com.example.animouse.data.NotificationHelper.toggleNotification(
+                            this, currentAnimeId, currentTitle, airingAt, episode
+                        )
+                        val msg = if (newState) "Мышь напомнит о выходе серии!" else "Уведомления отключены"
                         android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
                         true
                     }
                     2 -> {
-                        // 2. ПОДЕЛИТЬСЯ
+                        val shikiUrl = "https://shikimori.one/animes/$idMal"
+                        val shareText = "Слежу за аниме «${currentTitle}» в приложении AniMouse!\nСсылка на тайтл: $shikiUrl"
+
                         val shareIntent = android.content.Intent().apply {
                             action = android.content.Intent.ACTION_SEND
-                            putExtra(android.content.Intent.EXTRA_TEXT, "Смотрю аниме «$title» в приложении AniMouse! Присоединяйся!")
+                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
                             type = "text/plain"
                         }
                         startActivity(android.content.Intent.createChooser(shareIntent, "Поделиться тайтлом"))
                         true
                     }
                     3 -> {
-                        // 3. В GOOGLE КАЛЕНДАРЬ
-                        val extraData = viewModel.aniListExtra.value
-                        val nextEp = extraData?.nextAiringEpisode
-
-                        // Пуленепробиваемый метод: сразу конвертируем в Long, а если там null — ставим 0L
                         val airingTime: Long = nextEp?.airingAt?.toLong() ?: 0L
 
-                        // Теперь airingTime это 100% обычное число, IDE будет счастлива
                         if (nextEp != null && airingTime > 0L) {
                             val beginTime = airingTime * 1000L
+
+                            // Защита: чтобы totalEpisodesAniList точно был, если его нет - берем из Шикимори
+                            val totalEp = intent.getIntExtra("EXTRA_EPISODES_TOTAL", 0).takeIf { it > 0 } ?: (shikiDetails?.episodes ?: 0)
+                            val currentNextEp = nextEp.episode
+
+                            val remainingWeeks = if (totalEp > 0 && totalEp >= currentNextEp) {
+                                totalEp - currentNextEp + 1
+                            } else {
+                                1
+                            }
 
                             val calendarIntent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
                                 data = android.provider.CalendarContract.Events.CONTENT_URI
                                 putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, beginTime)
-                                putExtra(android.provider.CalendarContract.Events.TITLE, "Выход ${nextEp.episode} серии «$title»")
-                                putExtra(android.provider.CalendarContract.Events.DESCRIPTION, "Напоминание о релизе новой серии от AniMouse")
-                                putExtra(android.provider.CalendarContract.Events.EVENT_LOCATION, "AniMouse App")
+                                putExtra(android.provider.CalendarContract.Events.TITLE, "AniMouse напоминает: «${currentTitle}»")
+                                putExtra(android.provider.CalendarContract.Events.DESCRIPTION, "Выход новой серии на экраны Японии. Напоминание настроено автоматически.")
+                                putExtra(android.provider.CalendarContract.Events.EVENT_LOCATION, "Шикимори: https://shikimori.one/animes/$idMal")
+                                putExtra(android.provider.CalendarContract.Events.RRULE, "FREQ=WEEKLY;COUNT=$remainingWeeks")
                             }
                             startActivity(calendarIntent)
                         } else {
-                            android.widget.Toast.makeText(this, "Дата выхода неизвестна", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(this, "Дата релиза серий пока недоступна", android.widget.Toast.LENGTH_SHORT).show()
                         }
                         true
                     }
@@ -117,16 +152,16 @@ class DetailsActivity : AppCompatActivity() {
             popup.show()
         }
 
-        // --- НОВАЯ ЛЕНТА ТЕГОВ ---
-        // Первичная отрисовка без кастомных списков
-        setupTags(genres, animeId)
+    // --- НОВАЯ ЛЕНТА ТЕГОВ ---
+        // Первичная отрисовка без кастомных списков (теперь используем динамический ID)
+        setupTags(genres, currentAnimeId)
 
         // Как только база данных понимает, в каких списках состоит тайтл — перерисовываем теги!
         viewModel.activeCustomListIds.observe(this) { activeIds ->
             val allLists = viewModel.allCustomLists.value ?: emptyList()
             // Отфильтровываем только те списки, в которых есть текущее аниме
             val activeLists = allLists.filter { activeIds.contains(it.id) }
-            setupTags(genres, animeId, activeLists)
+            setupTags(genres, currentAnimeId, activeLists) // <-- ЗДЕСЬ ТЕПЕРЬ ТОЖЕ currentAnimeId!
         }
 
         // 3. Стартовая загрузка
@@ -141,9 +176,11 @@ class DetailsActivity : AppCompatActivity() {
         // 4. Умный обработчик ответа от Шикимори
         viewModel.animeDetails.observe(this) { details ->
             if (details != null) {
-                // Подменяем название на русское, если оно есть
-                val finalTitle = if (!details.russian.isNullOrBlank()) details.russian else title
-                binding.textTitleLarge.text = finalTitle
+                // СОХРАНЯЕМ РУССКОЕ НАЗВАНИЕ В НАШУ ПЕРЕМЕННУЮ
+                currentTitle = details.russian?.takeIf { it.isNotBlank() } ?: currentTitle
+                binding.textTitleLarge.text = currentTitle
+
+                // ... остальной код эпизодов и синопсиса
 
                 // Логика эпизодов: Вышло (Шикимори) / Всего (AniList)
                 val totalEp = if (totalEpisodesAniList > 0) totalEpisodesAniList else details.episodes
@@ -159,6 +196,7 @@ class DetailsActivity : AppCompatActivity() {
                     setEnglishFallbackDescription(descEnglish)
                 }
             }
+            updateReleaseBadge()
         }
 
         // --- Подписка на заметки ---
@@ -179,10 +217,14 @@ class DetailsActivity : AppCompatActivity() {
                 val fetchedId = extraData.id
                 if (currentAnimeId == -1 && fetchedId != null) {
                     currentAnimeId = fetchedId
-                    // Разблокируем локальную базу данных!
+
+                    // Разблокируем локальную базу данных на полную мощность!
                     viewModel.loadStatus(currentAnimeId)
                     viewModel.loadNotes(currentAnimeId)
+                    viewModel.loadCustomListsData(currentAnimeId) // <-- ДОБАВИЛИ ЭТУ СТРОЧКУ!
                 }
+
+                // ... весь остальной твой код трейлеров и связанных тайтлов ниже ...
                 // Обрабатываем Трейлер
                 val trailer = extraData.trailer
                 if (trailer != null && trailer.site == "youtube" && trailer.id != null) {
@@ -213,6 +255,7 @@ class DetailsActivity : AppCompatActivity() {
                     binding.recyclerRelated.adapter = adapter
                 }
             }
+            updateReleaseBadge()
         }
 
         // Если сетевой запрос упал — плавно подставляем бэкап-данные
@@ -241,8 +284,8 @@ class DetailsActivity : AppCompatActivity() {
 
         binding.btnStatus.setOnClickListener {
             if (currentAnimeId != -1) {
-                // Передаем все необходимые данные, которые мы получили из Интента в начале onCreate
-                showBottomSheetDialog(currentAnimeId, idMal, title, posterUrl, score, totalEpisodesAniList)
+                // Передаем currentTitle для сохранения в БД!
+                showBottomSheetDialog(currentAnimeId, idMal, currentTitle, posterUrl, score, totalEpisodesAniList)
             } else {
                 Toast.makeText(this, "Синхронизация с базой...", Toast.LENGTH_SHORT).show()
             }
@@ -336,9 +379,14 @@ class DetailsActivity : AppCompatActivity() {
             val epAired = currentDetails?.episodes_aired ?: 0
             val epTotal = if (epTotalAniList > 0) epTotalAniList else (currentDetails?.episodes ?: 0)
             val animeReleaseStatus = currentDetails?.status
+            val extraData = viewModel.aniListExtra.value
+            val animeSeason = extraData?.season
+            val animeSeasonYear = extraData?.seasonYear
 
             fun saveWithStatus(newStatus: String?) {
-                viewModel.updateStatus(animeId, idMal, newStatus, title, posterUrl, score, epTotal, epAired, animeReleaseStatus)
+                viewModel.updateStatus(
+                    animeId, idMal, newStatus, title, posterUrl, score,
+                    epTotal, epAired, animeReleaseStatus, animeSeason, animeSeasonYear)
                 bottomSheetDialog.dismiss()
             }
 
@@ -519,6 +567,40 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         alertDialog.show()
+    }
+
+    private fun updateReleaseBadge() {
+        val shikiStatus = viewModel.animeDetails.value?.status
+        val aniSeason = viewModel.aniListExtra.value?.season
+        val aniYear = viewModel.aniListExtra.value?.seasonYear
+
+        val translatedSeason = when (aniSeason?.uppercase()) {
+            "WINTER" -> "Зима"
+            "SPRING" -> "Весна"
+            "SUMMER" -> "Лето"
+            "FALL" -> "Осень"
+            else -> ""
+        }
+        val seasonSuffix = if (aniYear != null && translatedSeason.isNotEmpty()) " • $aniYear $translatedSeason" else ""
+
+        when (shikiStatus?.lowercase()) {
+            "ongoing", "releasing" -> {
+                binding.textDetailsReleaseStatus.text = "Онгоинг"
+                binding.textDetailsReleaseStatus.setBackgroundResource(R.drawable.bg_badge_turquoise)
+                binding.textDetailsReleaseStatus.visibility = android.view.View.VISIBLE
+            }
+            "anons", "upcoming" -> {
+                binding.textDetailsReleaseStatus.text = "Анонс$seasonSuffix"
+                binding.textDetailsReleaseStatus.setBackgroundResource(R.drawable.bg_badge_orange)
+                binding.textDetailsReleaseStatus.visibility = android.view.View.VISIBLE
+            }
+            "released", "finished" -> {
+                binding.textDetailsReleaseStatus.text = "Вышло$seasonSuffix"
+                binding.textDetailsReleaseStatus.setBackgroundResource(R.drawable.bg_badge_green)
+                binding.textDetailsReleaseStatus.visibility = android.view.View.VISIBLE
+            }
+            else -> binding.textDetailsReleaseStatus.visibility = android.view.View.GONE
+        }
     }
 
 }

@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="16dp"
-    android:layout_marginVertical="3dp"
+    android:layout_marginTop="10dp"
     app:cardBackgroundColor="@color/bg_dark_card"
     app:cardCornerRadius="20dp"
     app:cardElevation="0dp">
@@ -48,25 +48,29 @@
             android:id="@+id/dividerTitle"
             android:layout_width="0dp"
             android:layout_height="1dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
             android:background="#339CA3AF"
             app:layout_constraintEnd_toEndOf="@id/textTitle"
             app:layout_constraintStart_toStartOf="@id/textTitle"
-            app:layout_constraintTop_toBottomOf="@id/textTitle" />
+            app:layout_constraintTop_toBottomOf="@id/textTitle"
+            app:layout_constraintBottom_toTopOf="@id/layoutInfo" />
 
         <LinearLayout
-            android:id="@+id/layoutRating"
-            android:layout_width="wrap_content"
+            android:id="@+id/layoutInfo"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
+            android:layout_marginTop="8dp"
+            app:layout_constraintEnd_toEndOf="@id/dividerTitle"
             app:layout_constraintStart_toStartOf="@id/textTitle"
             app:layout_constraintTop_toBottomOf="@id/dividerTitle">
 
             <ImageView
-                android:layout_width="15dp"
-                android:layout_height="15dp"
+                android:id="@+id/iconStar"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
                 android:src="@drawable/ic_star_sol"
                 app:tint="@color/orange_accent" />
 
@@ -76,9 +80,39 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
                 android:textColor="@color/text_secondary"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 tools:text="4.8" />
+
+            <TextView
+                android:id="@+id/textEpisodes"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/turquoise_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="•  5 / 12 eps" />
         </LinearLayout>
+
+        <HorizontalScrollView
+            android:id="@+id/scrollBadges"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="4dp"
+            android:scrollbars="none"
+            app:layout_constrainedWidth="true"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintEnd_toEndOf="@id/dividerTitle"
+            app:layout_constraintStart_toStartOf="@id/textTitle"
+            app:layout_constraintTop_toBottomOf="@id/layoutInfo"
+            app:layout_constraintBottom_toBottomOf="parent"> <LinearLayout
+            android:id="@+id/layoutCustomBadges"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical" />
+        </HorizontalScrollView>
 
         <LinearLayout
             android:id="@+id/layoutAiring"

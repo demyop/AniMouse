@@ -38,11 +38,9 @@
             android:layout_height="wrap_content"
             android:layout_margin="8dp"
             android:scrollbars="none"
-            app:layout_constrainedWidth="true"
-            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/textReleaseStatus">
+            app:layout_constraintEnd_toEndOf="parent">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -71,21 +69,6 @@
 
             </LinearLayout>
         </HorizontalScrollView>
-
-        <TextView
-            android:id="@+id/textReleaseStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
-            android:textColor="@color/bg_dark_deep"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:visibility="gone"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            android:background="@drawable/bg_badge_turquoise" />
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/layoutInfo"
@@ -132,6 +115,23 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 tools:text="5/12 eps" />
         </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <TextView
+            android:id="@+id/textReleaseStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="2dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/textTitle"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="Вышло • 2024 Зима" />
 
         <TextView
             android:id="@+id/textTitle"

@@ -11,4 +11,6 @@ data class Anime(
     val genres: List<String>?,  // Список жанров
     val averageScore: Int?,      // Рейтинг (от 0 до 100)
     val status: String?,
+    val season: String? = null,
+    val seasonYear: Int? = null
 )

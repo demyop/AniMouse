@@ -32,40 +32,42 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
     fun updateStatus(
         animeId: Int,
         idMal: Int,
-        newStatus: String?,
+        userFolderStatus: String?, // Это папка (Смотрю/В планах)
         title: String,
         posterUrl: String?,
         score: Int,
         epTotal: Int,
         epAired: Int,
-        animeStatus: String?
+        releaseStatus: String?,    // Это статус (Вышло/Онгоинг)
+        season: String?,
+        seasonYear: Int?
     ) {
-        viewModelScope.launch {
-            if (newStatus == null || newStatus == "NONE") {
-                // Если юзер нажал "Удалить из списков"
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (userFolderStatus == null || userFolderStatus == "NONE") {
                 val current = database.userAnimeDao().getAnimeById(animeId)
                 if (current != null) {
-                    // Сначала обнуляем статус (чтобы пропало из стандартных списков)
+                    // Обнуляем именно ПАПКУ (в твоей БД это поле status)
                     database.userAnimeDao().insert(current.copy(status = null))
-                    // А затем пытаемся удалить полностью (удалится, только если нет в кастомных списках)
                     database.userAnimeDao().deleteIfUnused(animeId)
                 }
             } else {
-                // Добавляем или обновляем карточку
                 val entity = com.example.animouse.data.database.UserAnimeEntity(
                     animeId = animeId,
                     idMal = idMal,
-                    status = newStatus,
+                    status = userFolderStatus,      // <-- ПАПКА! ("WATCHING")
                     title = title,
                     posterUrl = posterUrl,
                     score = score,
                     episodesTotal = epTotal,
                     episodesAired = epAired,
-                    animeStatus = animeStatus
+                    animeStatus = releaseStatus,    // <-- РЕЛИЗ! ("FINISHED")
+                    season = season,
+                    seasonYear = seasonYear
                 )
                 database.userAnimeDao().insert(entity)
             }
-            _currentStatus.value = newStatus
+
+            loadStatus(animeId)
         }
     }
 
@@ -80,13 +82,20 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
                 val isSearchByMal = animeId == -1 && idMal != -1
 
                 // Подменяем текст запроса в зависимости от ситуации
+                // Подменяем текст запроса в зависимости от ситуации
                 val query = if (isSearchByMal) {
                     """
                     query(${'$'}idMal: Int) {
                       Media(idMal: ${'$'}idMal, type: ANIME) {
                         id
+                        season       # <-- ДОБАВИТЬ
+                        seasonYear   # <-- ДОБАВИТЬ
                         trailer { id site }
                         relations { edges { relationType node { id idMal title { romaji } coverImage { large } averageScore } } }
+                        nextAiringEpisode {
+                          airingAt
+                          episode
+                        }
                       }
                     }
                     """.trimIndent()
@@ -95,8 +104,14 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
                     query(${'$'}id: Int) {
                       Media(id: ${'$'}id, type: ANIME) {
                         id
+                        season       # <-- ДОБАВИТЬ
+                        seasonYear   # <-- ДОБАВИТЬ
                         trailer { id site }
                         relations { edges { relationType node { id idMal title { romaji } coverImage { large } averageScore } } }
+                        nextAiringEpisode {
+                          airingAt
+                          episode
+                        }
                       }
                     }
                     """.trimIndent()

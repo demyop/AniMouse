@@ -19,6 +19,9 @@ class AnimeRepository {
                     ) {
                       id
                       idMal  # <-- ДОБАВИЛИ ЗАПРОС ID ДЛЯ ШИКИМОРИ
+                      status       # <-- ДОБАВИЛИ! Теперь он не null
+                      season       # <-- ДОБАВИТЬ ЭТО
+                      seasonYear   # <-- ДОБАВИТЬ ЭТО
                       episodes
                       description
                       genres

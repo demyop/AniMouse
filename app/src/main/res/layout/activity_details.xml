@@ -126,6 +126,23 @@
                 app:layout_constraintTop_toTopOf="@id/iconStar"
                 tools:text="12 / 24 эп." />
 
+            <TextView
+                android:id="@+id/textDetailsReleaseStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_green"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:textColor="@color/bg_dark_deep"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                app:layout_constraintEnd_toEndOf="@id/textTitleLarge"
+                app:layout_constraintTop_toBottomOf="@id/textTitleLarge"
+                android:layout_marginTop="8dp"
+                tools:text="Вышло • 2024 Зима"
+                tools:visibility="visible" />
+
             <HorizontalScrollView
                 android:id="@+id/scrollTags"
                 android:layout_width="0dp"
@@ -143,6 +160,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     app:singleLine="true" />
+
             </HorizontalScrollView>
 
             <LinearLayout

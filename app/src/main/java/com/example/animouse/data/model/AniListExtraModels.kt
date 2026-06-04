@@ -7,7 +7,9 @@ data class AniListExtraMedia(
     val id: Int?,
     val trailer: Trailer?,
     val relations: Relations?,
-    val nextAiringEpisode: NextAiringEpisode? // <-- ДОБАВИЛИ ЭТО ПОЛЕ
+    val nextAiringEpisode: NextAiringEpisode?, // <-- ДОБАВИЛИ ЭТО ПОЛЕ
+    val season: String? = null,
+    val seasonYear: Int? = null
 )
 
 data class Trailer(val id: String?, val site: String?)

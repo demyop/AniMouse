@@ -23,8 +23,26 @@ class SearchAnimeAdapter : RecyclerView.Adapter<SearchAnimeAdapter.SearchViewHol
         fun bind(anime: ShikimoriSearchResult) {
             binding.textSearchTitle.text = anime.russian ?: anime.name
 
+            // 1. Вычисляем ГОД и СЕЗОН из даты aired_on (формат "YYYY-MM-DD")
+            var seasonYearText = ""
+            val airedOn = anime.aired_on
+            if (!airedOn.isNullOrEmpty() && airedOn.length >= 7) {
+                val year = airedOn.substring(0, 4)
+                val month = airedOn.substring(5, 7).toIntOrNull() ?: 0
+
+                val season = when (month) {
+                    in 1..3 -> "Зима"
+                    in 4..6 -> "Весна"
+                    in 7..9 -> "Лето"
+                    in 10..12 -> "Осень"
+                    else -> ""
+                }
+                seasonYearText = if (season.isNotEmpty()) "$year • $season • " else "$year • "
+            }
+
+            // 2. Формируем финальную строку подзаголовка
             val scoreText = if (anime.score != "0.0" && anime.score != null) "⭐ ${anime.score}" else "⭐ —"
-            binding.textSearchSubtitle.text = "Эп: ${anime.episodes_aired}/${if (anime.episodes > 0) anime.episodes else "?"} • $scoreText"
+            binding.textSearchSubtitle.text = "$seasonYearText Эп: ${anime.episodes_aired}/${if (anime.episodes > 0) anime.episodes else "?"} • $scoreText"
 
             // --- ОБРАБОТКА СТАТУСА ---
             when (anime.status) {

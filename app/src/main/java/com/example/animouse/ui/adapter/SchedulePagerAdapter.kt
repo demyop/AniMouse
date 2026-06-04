@@ -4,9 +4,12 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.animouse.data.model.Anime
+import com.example.animouse.ui.activity.MainViewModel
 
 class SchedulePagerAdapter(
-    private val daysData: List<List<Anime>> // Оставили только сами данные
+    private val daysData: List<List<Anime>>,
+
+    private val customBadges: Map<Int, List<MainViewModel.CustomFolderPreview>> = emptyMap() // <-- ДОБАВИЛИ
 ) : RecyclerView.Adapter<SchedulePagerAdapter.PageViewHolder>() {
 
     inner class PageViewHolder(val recyclerView: RecyclerView) : RecyclerView.ViewHolder(recyclerView)
@@ -23,8 +26,8 @@ class SchedulePagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        // Передаем только список тайтлов для конкретного дня
-        holder.recyclerView.adapter = ScheduleAnimeAdapter(daysData[position])
+        // Передаем и список тайтлов, и кастомные теги дальше в адаптер!
+        holder.recyclerView.adapter = ScheduleAnimeAdapter(daysData[position], customBadges)
     }
 
     override fun getItemCount(): Int = daysData.size

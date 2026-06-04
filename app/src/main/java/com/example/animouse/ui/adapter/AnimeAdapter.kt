@@ -95,22 +95,33 @@ class AnimeAdapter(
                 binding.layoutCustomBadges.visibility = android.view.View.GONE
             }
 
-            // === 2. НОВАЯ ЛОГИКА: СТАТУС ВЫПУСКА (Онгоинг/Вышло) ===
-            // Используем textReleaseStatus, который мы добавили в XML
+// === 2. НОВАЯ ЛОГИКА: СТАТУС ВЫПУСКА С СЕЗОНОМ ===
+            val translatedSeason = when (anime.season?.uppercase()) {
+                "WINTER" -> "Зима"
+                "SPRING" -> "Весна"
+                "SUMMER" -> "Лето"
+                "FALL" -> "Осень"
+                else -> ""
+            }
+
+            val seasonSuffix = if (anime.seasonYear != null && translatedSeason.isNotEmpty()) {
+                " • ${anime.seasonYear} $translatedSeason"
+            } else ""
+
             when (anime.status?.lowercase()) {
                 "ongoing", "releasing" -> {
-                    binding.textReleaseStatus.text = "Онгоинг"
-                    binding.textReleaseStatus.setBackgroundResource(R.drawable.bg_badge_turquoise)
-                    binding.textReleaseStatus.visibility = View.VISIBLE
+                    binding.textReleaseStatus.visibility = View.GONE
                 }
                 "anons", "upcoming" -> {
-                    binding.textReleaseStatus.text = "Анонс"
-                    binding.textReleaseStatus.setBackgroundResource(R.drawable.bg_badge_orange)
+                    binding.textReleaseStatus.text = "Анонс$seasonSuffix"
+                    // Подкрасим сам текст в оранжевый, чтобы выделить анонсы, но без тяжелого фона
+                    binding.textReleaseStatus.setTextColor(androidx.core.content.ContextCompat.getColor(binding.root.context, R.color.orange_accent))
                     binding.textReleaseStatus.visibility = View.VISIBLE
                 }
                 "released", "finished" -> {
-                    binding.textReleaseStatus.text = "Вышло"
-                    binding.textReleaseStatus.setBackgroundResource(R.drawable.bg_badge_green)
+                    binding.textReleaseStatus.text = "Вышло$seasonSuffix"
+                    // Оставляем нейтральный цвет вторичного текста
+                    binding.textReleaseStatus.setTextColor(androidx.core.content.ContextCompat.getColor(binding.root.context, R.color.text_secondary))
                     binding.textReleaseStatus.visibility = View.VISIBLE
                 }
                 else -> binding.textReleaseStatus.visibility = View.GONE
