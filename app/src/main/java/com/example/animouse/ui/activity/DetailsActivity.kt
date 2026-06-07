@@ -1,13 +1,10 @@
 package com.example.animouse.ui.activity
 
-import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.Html
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.ViewModelProvider
 import com.bumptech.glide.Glide
 import com.example.animouse.R
@@ -56,7 +53,7 @@ class DetailsActivity : AppCompatActivity() {
 
         Glide.with(this).load(posterUrl).into(binding.imagePosterBig)
 
-        // --- НОВЫЕ КНОПКИ ВЕРХНЕЙ ПАНЕЛИ ---
+        // КНОПКИ ВЕРХНЕЙ ПАНЕЛИ
         binding.btnBack.setOnClickListener { finish() }
 
         binding.btnMenuOptions.setOnClickListener { view ->
@@ -73,17 +70,15 @@ class DetailsActivity : AppCompatActivity() {
 
             val isNotifying = com.example.animouse.data.NotificationHelper.isNotificationEnabled(this, currentAnimeId)
             // 1. Получаем цвет
-            val orangeColor = androidx.core.content.ContextCompat.getColor(this, R.color.orange_accent_dark) // Убедись, что цвет называется именно так в твоем colors.xml
+            val orangeColor = androidx.core.content.ContextCompat.getColor(this, R.color.orange_accent_dark)
 
-            // 2. Функция для покраски (теперь скобка закрыта!)
+            // 2. Функция для покраски
             fun tintIcon(resId: Int): android.graphics.drawable.Drawable? {
                 val drawable = androidx.core.content.ContextCompat.getDrawable(this, resId)?.mutate()
                 drawable?.let { androidx.core.graphics.drawable.DrawableCompat.setTint(it, orangeColor) }
                 return drawable
             }
-
-            // 3. Убираем эмодзи из текста и задаем иконки
-            val bellText = if (isNotifying) "Выключить уведомления" else "Напоминать о сериях"
+            val bellText = if (isNotifying) "Больше не напоминать" else "Напомнить!"
             val bellIcon = if (isNotifying) R.drawable.ic_notification_bell_off_sol else R.drawable.ic_notification_bell_alarm_sol
 
             // 4. Цепляем иконки к пунктам меню (ПРОПУСКАЕМ ИХ ЧЕРЕЗ ФУНКЦИЮ tintIcon!)
@@ -100,13 +95,13 @@ class DetailsActivity : AppCompatActivity() {
                         val newState = com.example.animouse.data.NotificationHelper.toggleNotification(
                             this, currentAnimeId, currentTitle, airingAt, episode
                         )
-                        val msg = if (newState) "Мышь напомнит о выходе серии!" else "Уведомления отключены"
+                        val msg = if (newState) "Мышь напомнит о выходе серии!" else "Уведомлять не буду"
                         android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
                         true
                     }
                     2 -> {
                         val shikiUrl = "https://shikimori.one/animes/$idMal"
-                        val shareText = "Слежу за аниме «${currentTitle}» в приложении AniMouse!\nСсылка на тайтл: $shikiUrl"
+                        val shareText = "Слежу за выходом аниме «${currentTitle}» в приложении AniMouse!\nСсылка на тайтл: $shikiUrl"
 
                         val shareIntent = android.content.Intent().apply {
                             action = android.content.Intent.ACTION_SEND
@@ -152,7 +147,7 @@ class DetailsActivity : AppCompatActivity() {
             popup.show()
         }
 
-    // --- НОВАЯ ЛЕНТА ТЕГОВ ---
+    // НОВАЯ ЛЕНТА ТЕГОВ
         // Первичная отрисовка без кастомных списков (теперь используем динамический ID)
         setupTags(genres, currentAnimeId)
 
@@ -180,13 +175,11 @@ class DetailsActivity : AppCompatActivity() {
                 currentTitle = details.russian?.takeIf { it.isNotBlank() } ?: currentTitle
                 binding.textTitleLarge.text = currentTitle
 
-                // ... остальной код эпизодов и синопсиса
-
                 // Логика эпизодов: Вышло (Шикимори) / Всего (AniList)
                 val totalEp = if (totalEpisodesAniList > 0) totalEpisodesAniList else details.episodes
                 binding.textDetailEpisodes.text = "${details.episodes_aired} / ${if (totalEp > 0) totalEp else "?"} эп."
 
-                // Проверка синопсиса на валидность
+                // Проверка описания на валидность
                 val rawDescription = details.description
                 if (!rawDescription.isNullOrBlank() && rawDescription != "Описание отсутствует.") {
                     // Очищаем BB-коды Шикимори

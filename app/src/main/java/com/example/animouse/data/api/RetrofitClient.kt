@@ -5,7 +5,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    // --- ТВОЙ ТЕКУЩИЙ КЛИЕНТ ДЛЯ ANILIST ---
+    // ТЕКУЩИЙ КЛИЕНТ ДЛЯ ANILIST
     private val retrofit by lazy {
         Retrofit.Builder()
             .baseUrl("https://graphql.anilist.co")
@@ -17,10 +17,10 @@ object RetrofitClient {
         retrofit.create(AniListApi::class.java)
     }
 
-    // --- НОВЫЙ КЛИЕНТ ДЛЯ SHIKIMORI ---
+    // НОВЫЙ КЛИЕНТ ДЛЯ SHIKIMORI
     private val shikimoriRetrofit by lazy {
         Retrofit.Builder()
-            .baseUrl("https://shikimori.one/api/") // Базовый URL Шикимори
+            .baseUrl("https://shikimori.one/api/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }

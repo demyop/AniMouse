@@ -5,8 +5,6 @@ import androidx.room.*
 @Dao
 interface UserAnimeDao {
 
-    // --- ТВОИ СТАРЫЕ МЕТОДЫ (оставляем как было) ---
-
     @Query("SELECT * FROM user_anime_list")
     suspend fun getAll(): List<UserAnimeEntity>
 
@@ -23,7 +21,7 @@ interface UserAnimeDao {
     suspend fun getAnimeById(id: Int): UserAnimeEntity?
 
 
-    // --- НОВЫЕ МЕТОДЫ (Для новой Offline-First логики и кастомных списков) ---
+    // НОВЫЕ МЕТОДЫ (Для новой Offline-First логики и кастомных списков)
 
     // Получить вообще все сохраненные тайтлы (у которых есть хоть какой-то стандартный статус)
     @Query("SELECT * FROM user_anime_list WHERE status IS NOT NULL")
