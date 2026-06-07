@@ -288,6 +288,29 @@ class DetailsActivity : AppCompatActivity() {
             if (currentAnimeId != -1) showNotesBottomSheet(currentAnimeId)
             else Toast.makeText(this, "Синхронизация с базой...", Toast.LENGTH_SHORT).show()
         }
+
+        val webView = binding.webViewPlayer
+
+        if (idMal != -1) {
+            // Настраиваем плеер
+            webView.settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true // ВОТ ЭТА СТРОЧКА ЗАПОМИНАЕТ СЕРИИ И ПРОГРЕСС!
+                mediaPlaybackRequiresUserGesture = true // Чтобы видео не орало само при открытии экрана
+            }
+
+            webView.webViewClient = android.webkit.WebViewClient() // Блокируем переход в Chrome
+            webView.webChromeClient = android.webkit.WebChromeClient() // Поддержка HTML5 видео
+
+            // Грузим плеер
+            val playerUrl = "https://kodik.biz/find-player?shikimoriID=$idMal"
+            webView.loadUrl(playerUrl)
+        } else {
+            // Если ID нет (например, локальный тайтл), прячем плеер
+            binding.playerContainer.visibility = android.view.View.GONE
+            binding.layoutDisclaimer.visibility = android.view.View.GONE
+        }
+
     }
 
     private fun setEnglishFallbackDescription(htmlDescription: String) {
