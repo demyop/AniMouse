@@ -1,13 +1,17 @@
 package com.example.animouse.data.repository
 
+import com.example.animouse.data.api.AniListApi
 import com.example.animouse.data.api.GraphQLRequest
-import com.example.animouse.data.api.RetrofitClient
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class AnimeRepository {
+@Singleton
+class AnimeRepository @Inject constructor(
+    private val api: AniListApi // 👈 Завхоз Hilt сам передаст сюда клиент!
+) {
 
     suspend fun getAnimeList() =
-
-        RetrofitClient.api.getAnime(
+        api.getAnime( // 👈 Больше никакого RetrofitClient.api
             GraphQLRequest(
                 """
                 query {
@@ -18,10 +22,10 @@ class AnimeRepository {
                       sort: POPULARITY_DESC
                     ) {
                       id
-                      idMal  # <-- ДОБАВИЛИ ЗАПРОС ID ДЛЯ ШИКИМОРИ
-                      status       # <-- ДОБАВИЛИ! Теперь он не null
-                      season       # <-- ДОБАВИТЬ ЭТО
-                      seasonYear   # <-- ДОБАВИТЬ ЭТО
+                      idMal
+                      status
+                      season
+                      seasonYear
                       episodes
                       description
                       genres

@@ -31,11 +31,6 @@
         <activity
             android:name=".ui.activity.NotesHubActivity"
             android:exported="false" />
-        <activity
-            android:name=".ui.activity.PlayerActivity"
-            android:hardwareAccelerated="true"
-            android:screenOrientation="fullUser"
-            android:theme="@style/Theme.AniMouse" />
     </application>
 
 </manifest>

@@ -16,12 +16,13 @@ import javax.inject.Inject
 
 @HiltViewModel // 1. Говорим, что эта ViewModel использует Hilt
 class MainViewModel @Inject constructor(
-    private val database: AppDatabase // 2. Hilt сам принесет нам готовую базу!
+    private val database: AppDatabase,
+    private val repository: AnimeRepository// 2. Hilt сам принесет нам готовую базу!
+
 ) : ViewModel() { // 3. Наследуемся от обычного ViewModel, Application больше не нужен
 
     // Наш репозиторий (по-хорошему, его потом тоже надо будет инжектить через Hilt,
     // но пока оставим так, чтобы не сломать логику)
-    private val repository = AnimeRepository()
 
     private val _allAnime = MutableLiveData<List<Anime>>(emptyList())
     val allAnime: LiveData<List<Anime>> = _allAnime

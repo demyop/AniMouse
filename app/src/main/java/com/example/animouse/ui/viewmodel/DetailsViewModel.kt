@@ -1,24 +1,27 @@
 package com.example.animouse.ui.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
-import com.example.animouse.data.api.RetrofitClient
+import com.example.animouse.data.api.AniListApi
+import com.example.animouse.data.api.GraphQLRequest
+import com.example.animouse.data.api.ShikimoriApi
 import com.example.animouse.data.database.AppDatabase
-import com.example.animouse.data.database.UserAnimeEntity
 import com.example.animouse.data.model.ShikimoriAnimeDetails
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class DetailsViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class DetailsViewModel @Inject constructor(
+    private val database: AppDatabase,         // 👈 Hilt сам даст нам базу данных
+    private val aniListApi: AniListApi,        // 👈 Hilt даст доступ к AniList
+    private val shikimoriApi: ShikimoriApi     // 👈 Hilt даст доступ к Shikimori
+) : ViewModel() {                              // 👈 Больше не нужен AndroidViewModel!
 
     // --- 1. ЛОКАЛЬНАЯ БАЗА (Списки пользователя) ---
-    private val database = Room.databaseBuilder(
-        application, AppDatabase::class.java, "animouse_db"
-    ).fallbackToDestructiveMigration().build()
-
     private val _currentStatus = MutableLiveData<String?>()
     val currentStatus: LiveData<String?> = _currentStatus
 
@@ -42,7 +45,7 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
         season: String?,
         seasonYear: Int?
     ) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             if (userFolderStatus == null || userFolderStatus == "NONE") {
                 val current = database.userAnimeDao().getAnimeById(animeId)
                 if (current != null) {
@@ -81,15 +84,13 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
                 // Определяем, откуда мы пришли: из поиска (только idMal) или с главного экрана (оба ID)
                 val isSearchByMal = animeId == -1 && idMal != -1
 
-                // Подменяем текст запроса в зависимости от ситуации
-                // Подменяем текст запроса в зависимости от ситуации
                 val query = if (isSearchByMal) {
                     """
                     query(${'$'}idMal: Int) {
                       Media(idMal: ${'$'}idMal, type: ANIME) {
                         id
-                        season       # <-- ДОБАВИТЬ
-                        seasonYear   # <-- ДОБАВИТЬ
+                        season
+                        seasonYear
                         trailer { id site }
                         relations { edges { relationType node { id idMal title { romaji } coverImage { large } averageScore } } }
                         nextAiringEpisode {
@@ -104,8 +105,8 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
                     query(${'$'}id: Int) {
                       Media(id: ${'$'}id, type: ANIME) {
                         id
-                        season       # <-- ДОБАВИТЬ
-                        seasonYear   # <-- ДОБАВИТЬ
+                        season
+                        seasonYear
                         trailer { id site }
                         relations { edges { relationType node { id idMal title { romaji } coverImage { large } averageScore } } }
                         nextAiringEpisode {
@@ -117,11 +118,11 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
                     """.trimIndent()
                 }
 
-                // Передаем нужную переменную
                 val variables = if (isSearchByMal) mapOf("idMal" to idMal) else mapOf("id" to animeId)
+                val request = GraphQLRequest(query, variables)
 
-                val request = com.example.animouse.data.api.GraphQLRequest(query, variables)
-                val response = com.example.animouse.data.api.RetrofitClient.api.getAnimeDetails(request)
+                // 👇 ИСПОЛЬЗУЕМ АПИ ИЗ HILT!
+                val response = aniListApi.getAnimeDetails(request)
 
                 _aniListExtra.value = response.data.Media
             } catch (e: Exception) {
@@ -144,7 +145,8 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
         }
         viewModelScope.launch {
             try {
-                val response = RetrofitClient.shikimoriApi.getAnimeDetails(idMal)
+                // 👇 ИСПОЛЬЗУЕМ АПИ ИЗ HILT!
+                val response = shikimoriApi.getAnimeDetails(idMal)
                 _animeDetails.value = response
                 _error.value = null
             } catch (e: Exception) {
@@ -250,5 +252,4 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
             loadCustomListsData(animeId)
         }
     }
-
 }

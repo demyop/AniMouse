@@ -4,13 +4,18 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.animouse.data.api.RetrofitClient
+import com.example.animouse.data.api.ShikimoriApi
 import com.example.animouse.data.model.ShikimoriSearchResult
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class SearchViewModel : ViewModel() {
+@HiltViewModel
+class SearchViewModel @Inject constructor(
+    private val shikimoriApi: ShikimoriApi // 👈 Hilt сам подставит сюда клиент из AppModule!
+) : ViewModel() {
 
     private val _searchResults = MutableLiveData<List<ShikimoriSearchResult>>()
     val searchResults: LiveData<List<ShikimoriSearchResult>> = _searchResults
@@ -32,7 +37,7 @@ class SearchViewModel : ViewModel() {
             delay(500) // Ждем полсекунды после последнего нажатия
             _isLoading.value = true
             try {
-                val results = RetrofitClient.shikimoriApi.searchAnime(query)
+                val results = shikimoriApi.searchAnime(query)
                 _searchResults.value = results
             } catch (e: Exception) {
                 _searchResults.value = emptyList()

@@ -69,8 +69,8 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.4.0")
 
     // Lifecycle + ViewModel
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.0")
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
 
     // Сеть и Парсинг
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
@@ -91,7 +91,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     // --- Jetpack Compose ---
-    val composeBom = platform("androidx.compose:compose-bom:2024.04.01")
+    val composeBom = platform("androidx.compose:compose-bom:2024.10.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
