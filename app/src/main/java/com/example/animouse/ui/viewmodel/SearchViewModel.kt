@@ -6,11 +6,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.animouse.data.api.RetrofitClient
 import com.example.animouse.data.model.ShikimoriSearchResult
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class SearchViewModel : ViewModel() {
+@HiltViewModel
+class SearchViewModel @Inject constructor() : ViewModel() {
 
     private val _searchResults = MutableLiveData<List<ShikimoriSearchResult>>()
     val searchResults: LiveData<List<ShikimoriSearchResult>> = _searchResults
