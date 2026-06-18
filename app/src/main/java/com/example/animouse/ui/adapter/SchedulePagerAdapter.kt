@@ -4,12 +4,13 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.animouse.data.model.Anime
-import com.example.animouse.ui.activity.MainViewModel
+import com.example.animouse.ui.viewmodel.MainViewModel
+
 
 class SchedulePagerAdapter(
     private val daysData: List<List<Anime>>,
 
-    private val customBadges: Map<Int, List<MainViewModel.CustomFolderPreview>> = emptyMap() // <-- ДОБАВИЛИ
+    private val customBadges: Map<Int, List<MainViewModel.CustomFolderPreview>> = emptyMap(),
 ) : RecyclerView.Adapter<SchedulePagerAdapter.PageViewHolder>() {
 
     inner class PageViewHolder(val recyclerView: RecyclerView) : RecyclerView.ViewHolder(recyclerView)

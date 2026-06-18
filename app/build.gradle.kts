@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt.android)
 }
 
 android {
@@ -36,10 +37,12 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        compose = true // ✅ Включаем Compose
     }
-
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.11"
+    }
 }
-// ... тут заканчивается блок android { ... }
 
 // 1. Блокируем любые случайные обновления библиотек до версий с багами
 configurations.all {
@@ -80,4 +83,27 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+    // Нативный плеер Media3 (ExoPlayer)
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+    implementation("androidx.media3:media3-ui:1.3.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
+    // Hilt (Dependency Injection)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    // --- Jetpack Compose ---
+    val composeBom = platform("androidx.compose:compose-bom:2024.04.01")
+    implementation(composeBom)
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Coil (Это как Glide, только специально созданный для Compose)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("androidx.compose.runtime:runtime-livedata:1.6.5") // Версия может быть и другой, но 1.6.5 стабильна
+    implementation("androidx.activity:activity-compose:1.9.0")
+}
+
+hilt {
+    enableAggregatingTask = false
 }

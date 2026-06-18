@@ -312,11 +312,11 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/textPlayerHeader">
 
-                <WebView
-                    android:id="@+id/webViewPlayer"
+                <androidx.media3.ui.PlayerView
+                    android:id="@+id/exoPlayerView"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="#000000" />
+                    android:layout_height="wrap_content" />
+
             </com.google.android.material.card.MaterialCardView>
 
             <LinearLayout

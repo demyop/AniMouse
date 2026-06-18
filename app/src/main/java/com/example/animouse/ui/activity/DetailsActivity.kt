@@ -1,165 +1,120 @@
 package com.example.animouse.ui.activity
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.CalendarContract
 import android.text.Html
 import android.view.View
 import android.widget.Toast
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.ViewModelProvider
-import com.bumptech.glide.Glide
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.MediaItem
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
 import com.example.animouse.R
-import com.example.animouse.databinding.ActivityDetailsBinding
+import com.example.animouse.data.NotificationHelper
+import com.example.animouse.data.api.KodikParser
+import com.example.animouse.data.database.CustomListEntity
+import com.example.animouse.data.database.NoteEntity
 import com.example.animouse.ui.viewmodel.DetailsViewModel
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
+@AndroidEntryPoint
 class DetailsActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityDetailsBinding
-    private lateinit var viewModel: DetailsViewModel
+    private val viewModel: DetailsViewModel by viewModels()
+    private var exoPlayer: ExoPlayer? = null
 
-    private var isDescriptionExpanded = false
+    // Сохраняем переменные уровня класса, чтобы BottomSheets имели к ним доступ
+    private var currentAnimeId = -1
+    private var idMal = -1
+    private var currentTitle = "Без названия"
+    private var posterUrl: String? = null
+    private var score = 0
+    private var totalEpisodesAniList = 0
+    private var descEnglish = "Описание отсутствует"
+    private var genres = arrayListOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityDetailsBinding.inflate(layoutInflater)
-        setContentView(binding.root)
 
-        // Скрываем блоки до загрузки
-        binding.cardTrailer.visibility = android.view.View.GONE
-        binding.textTrailerHeader.visibility = android.view.View.GONE
-        binding.textRelatedHeader.visibility = android.view.View.GONE
-        binding.recyclerRelated.visibility = android.view.View.GONE
+        // 1. Извлекаем данные
+        currentAnimeId = intent.getIntExtra("EXTRA_ID", -1)
+        idMal = intent.getIntExtra("EXTRA_ID_MAL", -1)
+        currentTitle = intent.getStringExtra("EXTRA_TITLE") ?: "Без названия"
+        posterUrl = intent.getStringExtra("EXTRA_POSTER")
+        score = intent.getIntExtra("EXTRA_SCORE", 0)
+        totalEpisodesAniList = intent.getIntExtra("EXTRA_EPISODES_TOTAL", 0)
+        descEnglish = intent.getStringExtra("EXTRA_DESC_ENG") ?: "Описание отсутствует"
+        genres = intent.getStringArrayListExtra("EXTRA_GENRES") ?: arrayListOf()
 
-        viewModel = ViewModelProvider(this)[DetailsViewModel::class.java]
+        // 2. Инициализируем плеер
+        if (idMal != -1) {
+            exoPlayer = ExoPlayer.Builder(this).build()
+            lifecycleScope.launch {
+                try {
+                    val playerPageUrl = "https://kodik.site/find-player?shikimoriID=$idMal"
+                    val directVideoUrl = KodikParser.extractDirectLink(playerPageUrl)
 
-        // 1. Извлекаем данные из Интента (включая бэкап-информацию с AniList)
-
-        // Делаем переменную изменяемой (var)
-        var currentAnimeId = intent.getIntExtra("EXTRA_ID", -1)
-        val idMal = intent.getIntExtra("EXTRA_ID_MAL", -1)
-        val animeId = intent.getIntExtra("EXTRA_ID", -1)
-        var currentTitle = intent.getStringExtra("EXTRA_TITLE") ?: "Без названия"
-        val posterUrl = intent.getStringExtra("EXTRA_POSTER")
-        val score = intent.getIntExtra("EXTRA_SCORE", 0)
-
-        val descEnglish = intent.getStringExtra("EXTRA_DESC_ENG") ?: "Описание отсутствует"
-        val totalEpisodesAniList = intent.getIntExtra("EXTRA_EPISODES_TOTAL", 0)
-        val genres = intent.getStringArrayListExtra("EXTRA_GENRES") ?: arrayListOf()
-
-        // 2. Инициализируем стартовый UI данными с AniList
-        binding.textTitleLarge.text = title
-        binding.textDetailScore.text = if (score > 0) "$score%" else "—"
-        binding.textDetailEpisodes.text = "0 / ${if (totalEpisodesAniList > 0) totalEpisodesAniList else "?"} эп."
-
-        Glide.with(this).load(posterUrl).into(binding.imagePosterBig)
-
-        // КНОПКИ ВЕРХНЕЙ ПАНЕЛИ
-        binding.btnBack.setOnClickListener { finish() }
-
-        binding.btnMenuOptions.setOnClickListener { view ->
-            val popup = android.widget.PopupMenu(this, view)
-
-            // Включаем принудительное отображение иконок (Работает на Android 10+)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                popup.setForceShowIcon(true)
-            }
-
-            val shikiDetails = viewModel.animeDetails.value
-            val extraData = viewModel.aniListExtra.value
-            val nextEp = extraData?.nextAiringEpisode
-
-            val isNotifying = com.example.animouse.data.NotificationHelper.isNotificationEnabled(this, currentAnimeId)
-            // 1. Получаем цвет
-            val orangeColor = androidx.core.content.ContextCompat.getColor(this, R.color.orange_accent_dark)
-
-            // 2. Функция для покраски
-            fun tintIcon(resId: Int): android.graphics.drawable.Drawable? {
-                val drawable = androidx.core.content.ContextCompat.getDrawable(this, resId)?.mutate()
-                drawable?.let { androidx.core.graphics.drawable.DrawableCompat.setTint(it, orangeColor) }
-                return drawable
-            }
-            val bellText = if (isNotifying) "Больше не напоминать" else "Напомнить!"
-            val bellIcon = if (isNotifying) R.drawable.ic_notification_bell_off_sol else R.drawable.ic_notification_bell_alarm_sol
-
-            // 4. Цепляем иконки к пунктам меню (ПРОПУСКАЕМ ИХ ЧЕРЕЗ ФУНКЦИЮ tintIcon!)
-            popup.menu.add(0, 1, 0, bellText).icon = tintIcon(bellIcon)
-            popup.menu.add(0, 2, 0, "Поделиться ссылкой").icon = tintIcon(R.drawable.ic_share_network_sol)
-            popup.menu.add(0, 3, 0, "В Google Календарь").icon = tintIcon(R.drawable.ic_calendar_sol)
-
-            popup.setOnMenuItemClickListener { menuItem ->
-                when (menuItem.itemId) {
-                    1 -> {
-                        val airingAt = nextEp?.airingAt?.toLong() ?: 0L
-                        val episode = nextEp?.episode ?: 0
-
-                        val newState = com.example.animouse.data.NotificationHelper.toggleNotification(
-                            this, currentAnimeId, currentTitle, airingAt, episode
-                        )
-                        val msg = if (newState) "Мышь напомнит о выходе серии!" else "Уведомлять не буду"
-                        android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
-                        true
+                    if (directVideoUrl != null) {
+                        val dataSourceFactory = DefaultHttpDataSource.Factory()
+                            .setDefaultRequestProperties(mapOf("Referer" to "https://kodik.site/"))
+                        val mediaSource = DefaultMediaSourceFactory(this@DetailsActivity)
+                            .setDataSourceFactory(dataSourceFactory)
+                            .createMediaSource(MediaItem.fromUri(directVideoUrl))
+                        exoPlayer?.setMediaSource(mediaSource)
+                        exoPlayer?.prepare()
+                        exoPlayer?.playWhenReady = true
+                    } else {
+                        showDebugDialog("Парсер не справился 🕵️‍♂️", "Кодик спрятал ссылку.")
                     }
-                    2 -> {
-                        val shikiUrl = "https://shikimori.one/animes/$idMal"
-                        val shareText = "Слежу за выходом аниме «${currentTitle}» в приложении AniMouse!\nСсылка на тайтл: $shikiUrl"
-
-                        val shareIntent = android.content.Intent().apply {
-                            action = android.content.Intent.ACTION_SEND
-                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                            type = "text/plain"
-                        }
-                        startActivity(android.content.Intent.createChooser(shareIntent, "Поделиться тайтлом"))
-                        true
-                    }
-                    3 -> {
-                        val airingTime: Long = nextEp?.airingAt?.toLong() ?: 0L
-
-                        if (nextEp != null && airingTime > 0L) {
-                            val beginTime = airingTime * 1000L
-
-                            // Защита: чтобы totalEpisodesAniList точно был, если его нет - берем из Шикимори
-                            val totalEp = intent.getIntExtra("EXTRA_EPISODES_TOTAL", 0).takeIf { it > 0 } ?: (shikiDetails?.episodes ?: 0)
-                            val currentNextEp = nextEp.episode
-
-                            val remainingWeeks = if (totalEp > 0 && totalEp >= currentNextEp) {
-                                totalEp - currentNextEp + 1
-                            } else {
-                                1
-                            }
-
-                            val calendarIntent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
-                                data = android.provider.CalendarContract.Events.CONTENT_URI
-                                putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, beginTime)
-                                putExtra(android.provider.CalendarContract.Events.TITLE, "AniMouse напоминает: «${currentTitle}»")
-                                putExtra(android.provider.CalendarContract.Events.DESCRIPTION, "Выход новой серии на экраны Японии. Напоминание настроено автоматически.")
-                                putExtra(android.provider.CalendarContract.Events.EVENT_LOCATION, "Шикимори: https://shikimori.one/animes/$idMal")
-                                putExtra(android.provider.CalendarContract.Events.RRULE, "FREQ=WEEKLY;COUNT=$remainingWeeks")
-                            }
-                            startActivity(calendarIntent)
-                        } else {
-                            android.widget.Toast.makeText(this, "Дата релиза серий пока недоступна", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                        true
-                    }
-                    else -> false
+                } catch (e: Exception) {
+                    showDebugDialog("Блокировка провайдером 🛑", "ВКЛЮЧИ VPN! Ошибка: ${e.message}")
                 }
             }
-            popup.show()
         }
 
-    // НОВАЯ ЛЕНТА ТЕГОВ
-        // Первичная отрисовка без кастомных списков (теперь используем динамический ID)
-        setupTags(genres, currentAnimeId)
-
-        // Как только база данных понимает, в каких списках состоит тайтл — перерисовываем теги!
-        viewModel.activeCustomListIds.observe(this) { activeIds ->
-            val allLists = viewModel.allCustomLists.value ?: emptyList()
-            // Отфильтровываем только те списки, в которых есть текущее аниме
-            val activeLists = allLists.filter { activeIds.contains(it.id) }
-            setupTags(genres, currentAnimeId, activeLists) // <-- ЗДЕСЬ ТЕПЕРЬ ТОЖЕ currentAnimeId!
-        }
-
-        // 3. Стартовая загрузка
+        // 3. Загружаем данные ViewModel
         if (currentAnimeId != -1) {
             viewModel.loadStatus(currentAnimeId)
             viewModel.loadNotes(currentAnimeId)
@@ -168,223 +123,368 @@ class DetailsActivity : AppCompatActivity() {
         viewModel.loadAnimeDetails(idMal)
         viewModel.loadAniListExtra(currentAnimeId, idMal)
 
-        // 4. Умный обработчик ответа от Шикимори
-        viewModel.animeDetails.observe(this) { details ->
-            if (details != null) {
-                // СОХРАНЯЕМ РУССКОЕ НАЗВАНИЕ В НАШУ ПЕРЕМЕННУЮ
-                currentTitle = details.russian?.takeIf { it.isNotBlank() } ?: currentTitle
-                binding.textTitleLarge.text = currentTitle
-
-                // Логика эпизодов: Вышло (Шикимори) / Всего (AniList)
-                val totalEp = if (totalEpisodesAniList > 0) totalEpisodesAniList else details.episodes
-                binding.textDetailEpisodes.text = "${details.episodes_aired} / ${if (totalEp > 0) totalEp else "?"} эп."
-
-                // Проверка описания на валидность
-                val rawDescription = details.description
-                if (!rawDescription.isNullOrBlank() && rawDescription != "Описание отсутствует.") {
-                    // Очищаем BB-коды Шикимори
-                    binding.textDescription.text = rawDescription.replace(Regex("\\[.*?\\]"), "")
-                } else {
-                    // Спасательный круг: ставим английский текст, декорируя HTML-теги AniList
-                    setEnglishFallbackDescription(descEnglish)
-                }
-            }
-            updateReleaseBadge()
+        // 4. Отрисовываем интерфейс в Compose!
+        setContent {
+            DetailsScreen()
         }
 
-        // --- Подписка на заметки ---
-        viewModel.notes.observe(this) { notesList ->
-            if (notesList.isNotEmpty()) {
-                // Если есть заметки — делаем иконку закрашенной
-                binding.btnNote.setIconResource(R.drawable.ic_pencil_square_sol)
-            } else {
-                // Если пусто — оставляем контурную
-                binding.btnNote.setIconResource(R.drawable.ic_pencil_square_reg)
-            }
-        }
-
-        // --- Обработчик Трейлеров и Связанных тайтлов ---
+        // Обработка AniList Экстра-данных (если пришли из поиска)
         viewModel.aniListExtra.observe(this) { extraData ->
-            if (extraData != null) {
-                // === МАГИЯ ЗДЕСЬ: Если пришли из поиска, вытаскиваем AniList ID и активируем БД! ===
-                val fetchedId = extraData.id
-                if (currentAnimeId == -1 && fetchedId != null) {
-                    currentAnimeId = fetchedId
+            if (currentAnimeId == -1 && extraData?.id != null) {
+                currentAnimeId = extraData.id
+                viewModel.loadStatus(currentAnimeId)
+                viewModel.loadNotes(currentAnimeId)
+                viewModel.loadCustomListsData(currentAnimeId)
+            }
+        }
+    }
 
-                    // Разблокируем локальную базу данных на полную мощность!
-                    viewModel.loadStatus(currentAnimeId)
-                    viewModel.loadNotes(currentAnimeId)
-                    viewModel.loadCustomListsData(currentAnimeId) // <-- ДОБАВИЛИ ЭТУ СТРОЧКУ!
+    override fun onDestroy() {
+        super.onDestroy()
+        exoPlayer?.release()
+        exoPlayer = null
+    }
+
+    // =========================================================================
+    // МАГИЯ COMPOSE НАЧИНАЕТСЯ ЗДЕСЬ
+    // =========================================================================
+    @OptIn(ExperimentalLayoutApi::class)
+    @Composable
+    fun DetailsScreen() {
+        val scrollState = rememberScrollState()
+
+        // Подписываемся на все LiveData
+        val animeDetails by viewModel.animeDetails.observeAsState()
+        val aniListExtra by viewModel.aniListExtra.observeAsState()
+        val notes by viewModel.notes.observeAsState(emptyList())
+        val activeCustomListIds by viewModel.activeCustomListIds.observeAsState(emptyList())
+        val allCustomLists by viewModel.allCustomLists.observeAsState(emptyList())
+        val currentStatus by viewModel.currentStatus.observeAsState()
+        val error by viewModel.error.observeAsState()
+
+        var isDescriptionExpanded by remember { mutableStateOf(false) }
+        var isMenuExpanded by remember { mutableStateOf(false) }
+
+        // Обновляем тайтл, если пришел с Шикимори
+        val displayTitle = animeDetails?.russian?.takeIf { it.isNotBlank() } ?: currentTitle
+
+        // Логика эпизодов
+        val totalEp = if (totalEpisodesAniList > 0) totalEpisodesAniList else (animeDetails?.episodes ?: 0)
+        val airedEp = animeDetails?.episodes_aired ?: 0
+
+        // Логика описания
+        val rawDesc = animeDetails?.description
+        val displayDesc = if (!rawDesc.isNullOrBlank() && rawDesc != "Описание отсутствует.") {
+            rawDesc.replace(Regex("\\[.*?\\]"), "") // Убираем BB-коды
+        } else {
+            Html.fromHtml(descEnglish, Html.FROM_HTML_MODE_LEGACY).toString().trim().ifEmpty { "Описание отсутствует" }
+        }
+
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121212))) {
+
+            // Основной скроллируемый контент
+            Column(modifier = Modifier.verticalScroll(scrollState).padding(bottom = 40.dp)) {
+
+                // 1. ПОСТЕР С ПАРАЛЛАКСОМ И ГРАДИЕНТОМ
+                Box(
+                    modifier = Modifier
+                        .height(450.dp)
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            // Параллакс эффект! Картинка едет в два раза медленнее скролла
+                            translationY = scrollState.value * 0.5f
+                        }
+                ) {
+                    AsyncImage(
+                        model = posterUrl,
+                        contentDescription = "Постер",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    // Градиент сверху вниз
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Transparent, Color(0xFF121212)),
+                                startY = 0f,
+                                endY = Float.POSITIVE_INFINITY
+                            )
+                        )
+                    )
                 }
 
-                // ... весь остальной твой код трейлеров и связанных тайтлов ниже ...
-                // Обрабатываем Трейлер
-                val trailer = extraData.trailer
-                if (trailer != null && trailer.site == "youtube" && trailer.id != null) {
-                    binding.cardTrailer.visibility = android.view.View.VISIBLE
-                    binding.textTrailerHeader.visibility = android.view.View.VISIBLE
+                // 2. ИНФОРМАЦИОННЫЙ БЛОК
+                Column(modifier = Modifier.padding(horizontal = 20.dp).offset(y = (-40).dp)) {
+                    Text(
+                        text = displayTitle,
+                        color = Color.White,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(shadow = Shadow(color = Color(0x80000000), offset = Offset(0f, 4f), blurRadius = 8f))
+                    )
 
-                    // Грузим превьюшку с серверов YouTube
-                    val thumbnailUrl = "https://img.youtube.com/vi/${trailer.id}/maxresdefault.jpg"
-                    Glide.with(this).load(thumbnailUrl).into(binding.imageTrailerThumb)
+                    Row(
+                        modifier = Modifier.padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(painterResource(R.drawable.ic_star_sol), null, tint = Color(0xFFFF9800), modifier = Modifier.size(18.dp))
+                        Text(if (score > 0) "$score%" else "—", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+                        Text("|", color = Color(0xFF9CA3AF), fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
+                        Text("$airedEp / ${if (totalEp > 0) totalEp else "?"} эп.", color = Color.White, fontSize = 15.sp)
+                    }
 
-                    // Клик открывает приложение YouTube
-                    binding.cardTrailer.setOnClickListener {
-                        val intent = android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://www.youtube.com/watch?v=${trailer.id}")
-                        )
-                        startActivity(intent)
+                    // Плашка статуса выхода
+                    val shikiStatus = animeDetails?.status
+                    if (shikiStatus != null) {
+                        val aniSeason = aniListExtra?.season
+                        val aniYear = aniListExtra?.seasonYear
+                        val translatedSeason = when (aniSeason?.uppercase()) {
+                            "WINTER" -> "Зима"; "SPRING" -> "Весна"; "SUMMER" -> "Лето"; "FALL" -> "Осень"; else -> ""
+                        }
+                        val seasonSuffix = if (aniYear != null && translatedSeason.isNotEmpty()) " • $aniYear $translatedSeason" else ""
+
+                        val (statusText, bgColor) = when (shikiStatus.lowercase()) {
+                            "ongoing", "releasing" -> "Онгоинг" to Color(0xFF00BFA5)
+                            "anons", "upcoming" -> "Анонс$seasonSuffix" to Color(0xFFFF9800)
+                            "released", "finished" -> "Вышло$seasonSuffix" to Color(0xFF4CAF50)
+                            else -> "" to Color.Transparent
+                        }
+
+                        if (statusText.isNotEmpty()) {
+                            Box(modifier = Modifier.padding(top = 8.dp).background(bgColor, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                                Text(statusText, color = Color(0xFF121212), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
 
-                // Обрабатываем Связанные тайтлы
-                val relations = extraData.relations?.edges?.filter { it.node.title.romaji != null }
-                if (!relations.isNullOrEmpty()) {
-                    binding.textRelatedHeader.visibility = android.view.View.VISIBLE
-                    binding.recyclerRelated.visibility = android.view.View.VISIBLE
+                // 3. ТЕГИ (FlowRow сам переносит элементы на новую строку)
+                FlowRow(
+                    modifier = Modifier.padding(horizontal = 20.dp).offset(y = (-20).dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    DetailBadge("ID: $currentAnimeId", Color(0xFF1E1E1E), Color(0xFFAAAAAA))
 
-                    val adapter = com.example.animouse.ui.adapter.RelatedAnimeAdapter(relations)
-                    binding.recyclerRelated.adapter = adapter
+                    val activeLists = allCustomLists.filter { activeCustomListIds.contains(it.id) }
+                    for (list in activeLists) {
+                        DetailBadge(list.name, Color(android.graphics.Color.parseColor(list.colorHex)), Color(0xFF121212))
+                    }
+
+                    for (genre in genres) {
+                        DetailBadge(genre, Color(0xFF1E1E1E), Color.White)
+                    }
+                }
+
+                // 4. КНОПКИ ДЕЙСТВИЙ
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val (btnText, btnColor, btnTextColor) = when (currentStatus) {
+                        "WATCHING" -> Triple("Смотрю", Color(0xFF00BFA5), Color(0xFF121212))
+                        "PLANNED" -> Triple("В планах", Color(0xFFFF9800), Color(0xFF121212))
+                        "COMPLETED" -> Triple("Просмотрено", Color(0xFF4CAF50), Color(0xFF121212))
+                        "DROPPED" -> Triple("Брошено", Color(0xFF1E1E1E), Color.White)
+                        else -> Triple("Добавить в списки", Color(0xFF1E1E1E), Color.White)
+                    }
+
+                    Button(
+                        onClick = { showBottomSheetDialog(currentAnimeId, idMal, displayTitle, posterUrl, score, totalEpisodesAniList) },
+                        colors = ButtonDefaults.buttonColors(containerColor = btnColor),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f).height(56.dp)
+                    ) {
+                        Text(btnText, color = btnTextColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    OutlinedButton(
+                        onClick = { showNotesBottomSheet(currentAnimeId) },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.size(56.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(
+                            painterResource(if (notes.isNotEmpty()) R.drawable.ic_pencil_square_sol else R.drawable.ic_pencil_square_reg),
+                            contentDescription = "Заметки",
+                            tint = Color(0xFF00BFA5)
+                        )
+                    }
+                }
+
+                // 5. ОПИСАНИЕ
+                Text("Сюжет", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, top = 20.dp))
+
+                Text(
+                    text = displayDesc,
+                    color = Color(0xFFAAAAAA),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 5,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).animateContentSize()
+                )
+
+                Text(
+                    text = if (isDescriptionExpanded) "Свернуть" else "Читать далее...",
+                    color = Color(0xFFFF9800),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 20.dp).clickable { isDescriptionExpanded = !isDescriptionExpanded }
+                )
+
+                // 6. ТРЕЙЛЕР
+                val trailer = aniListExtra?.trailer
+                if (trailer != null && trailer.site == "youtube" && trailer.id != null) {
+                    Text("Трейлер", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, top = 32.dp))
+                    Box(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)).clickable {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.id}")))
+                        }
+                    ) {
+                        AsyncImage(model = "https://img.youtube.com/vi/${trailer.id}/maxresdefault.jpg", contentDescription = "Трейлер", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().background(Color.Black), alpha = 0.7f)
+                        Icon(painterResource(R.drawable.ic_media_sol), null, tint = Color.White, modifier = Modifier.size(48.dp).align(Alignment.Center))
+                    }
+                }
+
+                // 7. ПЛЕЕР (Интеграция XML ExoPlayer в Compose)
+                if (idMal != -1) {
+                    Text("Смотреть", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, top = 32.dp))
+                    Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp))) {
+                        AndroidView(
+                            factory = { context ->
+                                PlayerView(context).apply { player = exoPlayer }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Row(modifier = Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(painterResource(R.drawable.ic_notification_bell_alarm_sol), null, tint = Color(0xFFAAAAAA), modifier = Modifier.size(16.dp))
+                        Text(" Плеер стороннего сервиса. Реклама не связана с AniMouse.", color = Color(0xFFAAAAAA), fontSize = 10.sp, modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+
+                // 8. СВЯЗАННЫЕ ТАЙТЛЫ
+                val relations = aniListExtra?.relations?.edges?.filter { it.node.title.romaji != null }
+                if (!relations.isNullOrEmpty()) {
+                    Text("Связанное", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, top = 32.dp))
+                    LazyRow(
+                        modifier = Modifier.padding(top = 12.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(relations) { relation ->
+                            // Маленькая карточка для связанных тайтлов
+                            Column(modifier = Modifier.width(120.dp).clickable {
+                                val intent = Intent(this@DetailsActivity, DetailsActivity::class.java).apply {
+                                    putExtra("EXTRA_ID", relation.node.id)
+                                    putExtra("EXTRA_TITLE", relation.node.title.romaji)
+                                    putExtra("EXTRA_POSTER", relation.node.coverImage?.large)
+                                    putExtra("EXTRA_SCORE", relation.node.averageScore ?: 0)
+                                    putExtra("EXTRA_EPISODES_TOTAL", relation.node.episodes ?: 0)
+                                }
+                                startActivity(intent)
+                            }) {
+                                AsyncImage(
+                                    model = relation.node.coverImage?.large,
+                                    contentDescription = "Постер",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(12.dp))
+                                )
+                                Text(relation.relationType ?: "", color = Color(0xFF00BFA5), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                                Text(relation.node.title.romaji ?: "", color = Color.White, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                    }
                 }
             }
-            updateReleaseBadge()
-        }
 
-        // Если сетевой запрос упал — плавно подставляем бэкап-данные
-        viewModel.error.observe(this) { errorMessage ->
-            if (errorMessage != null) {
-                setEnglishFallbackDescription(descEnglish)
-                binding.textDetailEpisodes.text = "? / ${if (totalEpisodesAniList > 0) totalEpisodesAniList else "?"} эп."
+// ПОВЕРХ СКРОЛЛА: Тулбар с кнопками Назад и Меню
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 40.dp, start = 8.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = { finish() }) { Icon(painterResource(R.drawable.ic_arrow_reg), null, tint = Color.White) }
+
+                // Обернули кнопку в Box, чтобы меню выпадало прямо под ней
+                Box {
+                    IconButton(onClick = { isMenuExpanded = true }) {
+                        Icon(painterResource(R.drawable.ic_menu_dots_reg), null, tint = Color.White)
+                    }
+
+                    DropdownMenu(
+                        expanded = isMenuExpanded,
+                        onDismissRequest = { isMenuExpanded = false },
+                        modifier = Modifier.background(Color(0xFF1E1E1E)) // Темный фон, как у карточек
+                    ) {
+                        val isNotifying = NotificationHelper.isNotificationEnabled(this@DetailsActivity, currentAnimeId)
+
+                        DropdownMenuItem(
+                            text = { Text(if (isNotifying) "Больше не напоминать" else "Напомнить!", color = Color.White) },
+                            leadingIcon = {
+                                Icon(
+                                    painterResource(if (isNotifying) R.drawable.ic_notification_bell_off_sol else R.drawable.ic_notification_bell_alarm_sol),
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF9800)
+                                )
+                            },
+                            onClick = {
+                                val nextEp = aniListExtra?.nextAiringEpisode
+                                val newState = NotificationHelper.toggleNotification(this@DetailsActivity, currentAnimeId, currentTitle, nextEp?.airingAt?.toLong() ?: 0L, nextEp?.episode ?: 0)
+                                Toast.makeText(this@DetailsActivity, if (newState) "Напомню!" else "Не буду", Toast.LENGTH_SHORT).show()
+                                isMenuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Поделиться ссылкой", color = Color.White) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_share_network_sol), null, tint = Color(0xFFFF9800)) },
+                            onClick = {
+                                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, "Слежу за «${currentTitle}»!\nhttps://shikimori.one/animes/$idMal")
+                                }, "Поделиться"))
+                                isMenuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("В Google Календарь", color = Color.White) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_calendar_sol), null, tint = Color(0xFFFF9800)) },
+                            onClick = {
+                                val nextEp = aniListExtra?.nextAiringEpisode
+                                if (nextEp != null && nextEp.airingAt > 0) {
+                                    startActivity(Intent(Intent.ACTION_INSERT).apply {
+                                        data = CalendarContract.Events.CONTENT_URI
+                                        putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, nextEp.airingAt * 1000L)
+                                        putExtra(CalendarContract.Events.TITLE, "AniMouse: «${currentTitle}»")
+                                        putExtra(CalendarContract.Events.RRULE, "FREQ=WEEKLY;COUNT=1")
+                                    })
+                                } else Toast.makeText(this@DetailsActivity, "Дата неизвестна", Toast.LENGTH_SHORT).show()
+                                isMenuExpanded = false
+                            }
+                        )
+                    }
+                }
             }
         }
-
-        viewModel.currentStatus.observe(this) { status ->
-            updateStatusButtonUI(status)
-        }
-
-        // 5. Логика кнопки разворачивания синопсиса
-        binding.textReadMore.setOnClickListener {
-            isDescriptionExpanded = !isDescriptionExpanded
-            if (isDescriptionExpanded) {
-                binding.textDescription.maxLines = Integer.MAX_VALUE
-                binding.textReadMore.text = "Свернуть"
-            } else {
-                binding.textDescription.maxLines = 5 // В новой верстке мы поставили 5 строк
-                binding.textReadMore.text = "Читать далее..."
-            }
-        }
-
-        binding.btnStatus.setOnClickListener {
-            if (currentAnimeId != -1) {
-                // Передаем currentTitle для сохранения в БД!
-                showBottomSheetDialog(currentAnimeId, idMal, currentTitle, posterUrl, score, totalEpisodesAniList)
-            } else {
-                Toast.makeText(this, "Синхронизация с базой...", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        binding.btnNote.setOnClickListener {
-            if (currentAnimeId != -1) showNotesBottomSheet(currentAnimeId)
-            else Toast.makeText(this, "Синхронизация с базой...", Toast.LENGTH_SHORT).show()
-        }
-
-        val webView = binding.webViewPlayer
-
-        if (idMal != -1) {
-            // Настраиваем плеер
-            webView.settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true // ВОТ ЭТА СТРОЧКА ЗАПОМИНАЕТ СЕРИИ И ПРОГРЕСС!
-                mediaPlaybackRequiresUserGesture = true // Чтобы видео не орало само при открытии экрана
-            }
-
-            webView.webViewClient = android.webkit.WebViewClient() // Блокируем переход в Chrome
-            webView.webChromeClient = android.webkit.WebChromeClient() // Поддержка HTML5 видео
-
-            // Грузим плеер
-            val playerUrl = "https://kodik.biz/find-player?shikimoriID=$idMal"
-            webView.loadUrl(playerUrl)
-        } else {
-            // Если ID нет (например, локальный тайтл), прячем плеер
-            binding.playerContainer.visibility = android.view.View.GONE
-            binding.layoutDisclaimer.visibility = android.view.View.GONE
-        }
-
     }
 
-    private fun setEnglishFallbackDescription(htmlDescription: String) {
-        val cleanText = Html.fromHtml(htmlDescription, Html.FROM_HTML_MODE_LEGACY).toString().trim()
-        binding.textDescription.text = if (cleanText.isNotEmpty()) cleanText else "Описание отсутствует"
-    }
-
-    private fun updateStatusButtonUI(status: String?) {
-        val colorRes: Int
-        val textRes: String
-        val textColorRes: Int
-
-        when (status) {
-            "WATCHING" -> { textRes = "Смотрю"; colorRes = R.color.turquoise_secondary; textColorRes = R.color.bg_dark_deep }
-            "PLANNED" -> { textRes = "В планах"; colorRes = R.color.orange_accent; textColorRes = R.color.bg_dark_deep }
-            "COMPLETED" -> { textRes = "Просмотрено"; colorRes = R.color.green_accent; textColorRes = R.color.bg_dark_deep }
-            "DROPPED" -> { textRes = "Брошено"; colorRes = R.color.bg_dark_card; textColorRes = R.color.text_primary }
-            else -> { textRes = "Добавить в списки"; colorRes = R.color.bg_dark_card; textColorRes = R.color.text_primary }
-        }
-
-        binding.btnStatus.text = textRes
-        binding.btnStatus.backgroundTintList = android.content.res.ColorStateList.valueOf(
-            androidx.core.content.ContextCompat.getColor(this, colorRes)
-        )
-        binding.btnStatus.setTextColor(androidx.core.content.ContextCompat.getColor(this, textColorRes))
-    }
-
-    // Динамически создаем красивые плашки-теги
-    private fun setupTags(genres: List<String>, animeId: Int, customLists: List<com.example.animouse.data.database.CustomListEntity> = emptyList()) {
-        binding.chipGroupTags.removeAllViews()
-
-        // 1. Серенький ID
-        val idChip = com.google.android.material.chip.Chip(this).apply {
-            text = "ID: $animeId"
-            setChipBackgroundColorResource(R.color.bg_dark_card)
-            setTextColor(getColor(R.color.text_secondary))
-            isClickable = false
-            chipStrokeWidth = 0f
-        }
-        binding.chipGroupTags.addView(idChip)
-
-        // 2. КАСТОМНЫЕ СПИСКИ (Цветные теги)
-        for (list in customLists) {
-            val customChip = com.google.android.material.chip.Chip(this).apply {
-                text = list.name
-                val parsedColor = android.graphics.Color.parseColor(list.colorHex)
-                setChipBackgroundColor(android.content.res.ColorStateList.valueOf(parsedColor))
-                setTextColor(getColor(R.color.bg_dark_deep)) // Темный текст для контраста
-                isClickable = false
-                chipStrokeWidth = 0f
-            }
-            binding.chipGroupTags.addView(customChip)
-        }
-
-        // 3. Стандартные жанры
-        for (genre in genres) {
-            val chip = com.google.android.material.chip.Chip(this).apply {
-                text = genre
-                setChipBackgroundColorResource(R.color.bg_dark_card)
-                setTextColor(getColor(R.color.text_primary))
-                setChipIconResource(R.drawable.ic_tag_reg)
-                chipIconTint = android.content.res.ColorStateList.valueOf(getColor(R.color.turquoise_secondary))
-                iconStartPadding = 8f
-                chipIconSize = 40f
-                isClickable = false
-                chipStrokeWidth = 0f
-            }
-            binding.chipGroupTags.addView(chip)
+    // Компонент тега
+    @Composable
+    fun DetailBadge(text: String, bgColor: Color, textColor: Color) {
+        Box(modifier = Modifier.background(bgColor, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Text(text, color = textColor, fontSize = 14.sp)
         }
     }
+
+    // =========================================================================
+    // СТАРЫЕ XML ФУНКЦИИ (Bottom Sheets). ИХ НЕ ТРОГАЛИ!
+    // =========================================================================
 
     private fun showBottomSheetDialog(animeId: Int, idMal: Int, title: String, posterUrl: String?, score: Int, epTotalAniList: Int) {
         try {
-            val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+            val bottomSheetDialog = BottomSheetDialog(this)
             val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_status, null)
             bottomSheetDialog.setContentView(sheetView)
 
@@ -400,9 +500,7 @@ class DetailsActivity : AppCompatActivity() {
             val animeSeasonYear = extraData?.seasonYear
 
             fun saveWithStatus(newStatus: String?) {
-                viewModel.updateStatus(
-                    animeId, idMal, newStatus, title, posterUrl, score,
-                    epTotal, epAired, animeReleaseStatus, animeSeason, animeSeasonYear)
+                viewModel.updateStatus(animeId, idMal, newStatus, title, posterUrl, score, epTotal, epAired, animeReleaseStatus, animeSeason, animeSeasonYear)
                 bottomSheetDialog.dismiss()
             }
 
@@ -417,10 +515,8 @@ class DetailsActivity : AppCompatActivity() {
                 showCreateListDialog(animeId)
             }
 
-            // === ДИНАМИЧЕСКАЯ ОТРИСОВКА КАСТОМНЫХ СПИСКОВ ===
             val container = sheetView.findViewById<android.widget.LinearLayout>(R.id.layoutCustomListsContainer)
 
-            // Наблюдаем за списками и перерисовываем контейнер при изменениях
             viewModel.allCustomLists.observe(this) { allLists ->
                 val activeIds = viewModel.activeCustomListIds.value ?: emptyList()
                 container.removeAllViews()
@@ -432,10 +528,7 @@ class DetailsActivity : AppCompatActivity() {
                     val iconCheck = itemView.findViewById<android.widget.ImageView>(R.id.iconCheck)
 
                     textName.text = list.name
-                    // Парсим выбранный цвет
                     val parsedColor = android.graphics.Color.parseColor(list.colorHex)
-
-                    // Раскрашиваем кружок (если у тебя там ShapeDrawable, меняем tint)
                     indicator.backgroundTintList = android.content.res.ColorStateList.valueOf(parsedColor)
 
                     val isAlreadyInList = activeIds.contains(list.id)
@@ -449,30 +542,23 @@ class DetailsActivity : AppCompatActivity() {
                         textName.setTextColor(getColor(R.color.text_primary))
                     }
 
-                    // Логика добавления/удаления по клику с предупреждением
                     itemView.setOnClickListener {
                         if (isAlreadyInList) {
-                            // Предупреждение при удалении
-                            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                            MaterialAlertDialogBuilder(this)
                                 .setTitle("Удалить из списка?")
                                 .setMessage("Вы уверены, что хотите убрать тайтл из списка «${list.name}»?")
-                                .setPositiveButton("Удалить") { _, _ ->
-                                    viewModel.toggleAnimeInCustomList(list.id, animeId, idMal, title, posterUrl, score, epTotal, epAired, animeReleaseStatus, false)
-                                }
-                                .setNegativeButton("Отмена", null)
-                                .show()
+                                .setPositiveButton("Удалить") { _, _ -> viewModel.toggleAnimeInCustomList(list.id, animeId, idMal, title, posterUrl, score, epTotal, epAired, animeReleaseStatus, false) }
+                                .setNegativeButton("Отмена", null).show()
                         } else {
-                            // Добавление без предупреждения
                             viewModel.toggleAnimeInCustomList(list.id, animeId, idMal, title, posterUrl, score, epTotal, epAired, animeReleaseStatus, true)
                         }
                     }
                     container.addView(itemView)
                 }
             }
-
             bottomSheetDialog.show()
         } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Ошибка: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -486,27 +572,21 @@ class DetailsActivity : AppCompatActivity() {
         val btnSendNote = sheetView.findViewById<android.widget.ImageButton>(R.id.btnSendNote)
         val textEmptyNotes = sheetView.findViewById<android.widget.TextView>(R.id.textEmptyNotes)
 
-        // Переменная для хранения заметки, которую мы сейчас редактируем
-        var editingNote: com.example.animouse.data.database.NoteEntity? = null
+        var editingNote: NoteEntity? = null
 
         val adapter = com.example.animouse.ui.adapter.NotesAdapter(
             onEditClick = { note ->
-                // При клике на карандашик закидываем текст в поле ввода
                 inputNote.setText(note.content)
                 editingNote = note
                 inputNote.requestFocus()
             },
-            onDeleteClick = { note ->
-                viewModel.deleteNote(note)
-            }
+            onDeleteClick = { note -> viewModel.deleteNote(note) }
         )
         recyclerNotes.adapter = adapter
 
-        // Подписываемся на обновления именно для этого диалога
         viewModel.notes.observe(this) { notesList ->
             adapter.submitList(notesList)
             textEmptyNotes.visibility = if (notesList.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
-            // Если добавили новую заметку — скроллим наверх
             if (notesList.isNotEmpty()) recyclerNotes.scrollToPosition(0)
         }
 
@@ -514,25 +594,20 @@ class DetailsActivity : AppCompatActivity() {
             val text = inputNote.text.toString().trim()
             if (text.isNotEmpty()) {
                 if (editingNote != null) {
-                    // Обновляем существующую
                     viewModel.addOrUpdateNote(editingNote!!.copy(content = text))
                     editingNote = null
                 } else {
-                    // Создаем новую
-                    viewModel.addOrUpdateNote(
-                        com.example.animouse.data.database.NoteEntity(animeId = animeId, content = text)
-                    )
+                    viewModel.addOrUpdateNote(NoteEntity(animeId = animeId, content = text))
                 }
                 inputNote.text?.clear()
             }
         }
-
         bottomSheetDialog.show()
     }
 
     private fun showCreateListDialog(currentAnimeId: Int) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_create_list, null)
-        val alertDialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+        val alertDialog = MaterialAlertDialogBuilder(this)
             .setView(dialogView)
             .setBackground(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             .create()
@@ -541,21 +616,15 @@ class DetailsActivity : AppCompatActivity() {
         val viewPreview = dialogView.findViewById<View>(R.id.viewColorPreview)
         val textHex = dialogView.findViewById<android.widget.TextView>(R.id.textColorHex)
 
-        // Наши новые ползунки
         val seekRed = dialogView.findViewById<android.widget.SeekBar>(R.id.seekRed)
         val seekGreen = dialogView.findViewById<android.widget.SeekBar>(R.id.seekGreen)
         val seekBlue = dialogView.findViewById<android.widget.SeekBar>(R.id.seekBlue)
 
-        // Логика динамического изменения цвета (как на главном экране)
         val rgbListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                val r = seekRed.progress
-                val g = seekGreen.progress
-                val b = seekBlue.progress
-                val computedColor = android.graphics.Color.rgb(r, g, b)
-
+                val computedColor = android.graphics.Color.rgb(seekRed.progress, seekGreen.progress, seekBlue.progress)
                 viewPreview.backgroundTintList = android.content.res.ColorStateList.valueOf(computedColor)
-                textHex.text = String.format("#%02X%02X%02X", r, g, b)
+                textHex.text = String.format("#%02X%02X%02X", seekRed.progress, seekGreen.progress, seekBlue.progress)
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
@@ -566,57 +635,24 @@ class DetailsActivity : AppCompatActivity() {
         seekBlue.setOnSeekBarChangeListener(rgbListener)
 
         dialogView.findViewById<View>(R.id.btnCancelList).setOnClickListener { alertDialog.dismiss() }
-
         dialogView.findViewById<View>(R.id.btnSaveList).setOnClickListener {
             val listName = inputName.text.toString().trim()
-            val hex = textHex.text.toString()
-
             if (listName.isNotEmpty()) {
-                // Сохраняем с новым HEX-цветом
-                viewModel.createNewCustomList(listName, hex, currentAnimeId)
-
-                android.widget.Toast.makeText(this, "Список '$listName' создан!", android.widget.Toast.LENGTH_SHORT).show()
+                viewModel.createNewCustomList(listName, textHex.text.toString(), currentAnimeId)
+                Toast.makeText(this, "Список '$listName' создан!", Toast.LENGTH_SHORT).show()
                 alertDialog.dismiss()
-            } else {
-                inputName.error = "Введите название"
-            }
+            } else inputName.error = "Введите название"
         }
-
         alertDialog.show()
     }
 
-    private fun updateReleaseBadge() {
-        val shikiStatus = viewModel.animeDetails.value?.status
-        val aniSeason = viewModel.aniListExtra.value?.season
-        val aniYear = viewModel.aniListExtra.value?.seasonYear
-
-        val translatedSeason = when (aniSeason?.uppercase()) {
-            "WINTER" -> "Зима"
-            "SPRING" -> "Весна"
-            "SUMMER" -> "Лето"
-            "FALL" -> "Осень"
-            else -> ""
-        }
-        val seasonSuffix = if (aniYear != null && translatedSeason.isNotEmpty()) " • $aniYear $translatedSeason" else ""
-
-        when (shikiStatus?.lowercase()) {
-            "ongoing", "releasing" -> {
-                binding.textDetailsReleaseStatus.text = "Онгоинг"
-                binding.textDetailsReleaseStatus.setBackgroundResource(R.drawable.bg_badge_turquoise)
-                binding.textDetailsReleaseStatus.visibility = android.view.View.VISIBLE
-            }
-            "anons", "upcoming" -> {
-                binding.textDetailsReleaseStatus.text = "Анонс$seasonSuffix"
-                binding.textDetailsReleaseStatus.setBackgroundResource(R.drawable.bg_badge_orange)
-                binding.textDetailsReleaseStatus.visibility = android.view.View.VISIBLE
-            }
-            "released", "finished" -> {
-                binding.textDetailsReleaseStatus.text = "Вышло$seasonSuffix"
-                binding.textDetailsReleaseStatus.setBackgroundResource(R.drawable.bg_badge_green)
-                binding.textDetailsReleaseStatus.visibility = android.view.View.VISIBLE
-            }
-            else -> binding.textDetailsReleaseStatus.visibility = android.view.View.GONE
+    private suspend fun showDebugDialog(title: String, message: String) {
+        withContext(Dispatchers.Main) {
+            MaterialAlertDialogBuilder(this@DetailsActivity)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton("Понятно", null)
+                .show()
         }
     }
-
 }

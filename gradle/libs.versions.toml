@@ -8,13 +8,10 @@ appcompat = "1.7.1"
 material = "1.14.0"
 activity = "1.9.0"
 constraintlayout = "2.2.1"
-agp = "8.3.2" # Или твоя текущая версия Android Gradle Plugin
-kotlin = "1.9.23" # Если у тебя 1.9.x, пусть будет 1.9.23
-ksp = "1.9.23-1.0.19" # ВАЖНО: Первая часть KSP должна ИДЕАЛЬНО совпадать с версией Kotlin!
-room = "2.6.1" # Стабильная версия Room, которая не крашит Gradle
-
-
-
+agp = "8.3.2"
+kotlin = "1.9.23"
+ksp = "1.9.23-1.0.19"
+hilt = "2.51.1" # ✅ 1. Добавили версию Hilt сюда
 
 [libraries]
 androidx-cardview = { module = "androidx.cardview:cardview", version.ref = "cardview" }
@@ -27,8 +24,13 @@ material = { group = "com.google.android.material", name = "material", version.r
 androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 
+# ✅ 2. Добавили сами библиотеки Hilt
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version = "1.9.23-1.0.19" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" } # ✅ 3. Убрали хардкод, теперь берет из [versions]
+hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" } # ✅ 4. Добавили плагин Hilt
 

@@ -1,748 +1,513 @@
 package com.example.animouse.ui.activity
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.ViewModelProvider
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.animouse.ui.activity.MainViewModel
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.animouse.R
+import com.example.animouse.data.NotificationHelper
+import com.example.animouse.data.database.UserAnimeEntity
 import com.example.animouse.data.model.Anime
-import com.example.animouse.databinding.ActivityMainBinding
-import com.example.animouse.ui.adapter.AnimeAdapter
-import com.example.animouse.ui.adapter.FolderItem
-import com.example.animouse.ui.adapter.ListsFolderAdapter
-import com.example.animouse.ui.adapter.SchedulePagerAdapter
+import com.example.animouse.ui.compose.AnimeCard
+import com.example.animouse.ui.compose.AnimeListCard
+import com.example.animouse.ui.viewmodel.MainViewModel
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.tabs.TabLayoutMediator
-import kotlinx.coroutines.launch
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import dagger.hilt.android.AndroidEntryPoint
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
-    // Запрос разрешения на уведомления для Android 13+
-    private val requestPermissionLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            android.widget.Toast.makeText(this, "Уведомления разрешены!", android.widget.Toast.LENGTH_SHORT).show()
-        } else {
-            android.widget.Toast.makeText(this, "Без разрешения МЫш не сможет напоминать о сериях", android.widget.Toast.LENGTH_LONG).show()
-        }
+    private val viewModel: MainViewModel by viewModels()
+
+    private val requestPermissionLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { isGranted ->
+        Toast.makeText(this, if (isGranted) "Уведомления разрешены!" else "Без разрешения МЫш не сможет напоминать о сериях", Toast.LENGTH_SHORT).show()
     }
-
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var viewModel: MainViewModel
-    private var tabLayoutMediator: TabLayoutMediator? = null
-
-    private var ongoingSortMethod = 0
-
-    // Переменная для хранения открытой папки (SPA подход)
-    private var openedFolderStatus: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        binding.btnNotesHub.setOnClickListener {
-            val intent = android.content.Intent(this, com.example.animouse.ui.activity.NotesHubActivity::class.java)
-            startActivity(intent)
-        }
 
-        viewModel = ViewModelProvider(this)[MainViewModel::class.java]
-
-        // Проверяем и запрашиваем права на уведомления
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             }
         }
 
-        binding.toolbar.title = "AniMouse | Календарь аниме"
-        binding.recyclerAnime.layoutManager = GridLayoutManager(this, 2)
-// Перерисовываем экран, как только база посчитает кастомные папки и плашки
-        viewModel.customFolderPreviews.observe(this) { refreshUI() }
-        viewModel.animeCustomBadges.observe(this) { refreshUI() }
-        viewModel.allAnime.observe(this) { refreshUI() }
-        viewModel.animeStatuses.observe(this) { refreshUI() }
-        viewModel.localAnime.observe(this) { refreshUI() } // Перерисовываем UI при обновлении кэша базы
-
-        binding.toolbar.setOnClickListener {
-            Toast.makeText(this, "AniMouse v1.0", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.switchFavorites.setOnCheckedChangeListener { _, _ -> refreshUI() }
-
-        binding.bottomNavigation.setOnItemSelectedListener { item ->
-            refreshUI(item.itemId)
-            true
-        }
-
-        binding.toolbar.setOnClickListener {
-            Toast.makeText(this, "AniMouse v1.0", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.switchFavorites.setOnCheckedChangeListener { _, _ -> refreshUI() }
-
-        // === ВСТАВЛЯЕМ КЛИК ПО ЛУПЕ СЮДА ===
-        binding.btnSearch.setOnClickListener {
-            val intent = android.content.Intent(this, com.example.animouse.ui.activity.SearchActivity::class.java)
-            startActivity(intent)
-        }
-        // ===================================
-
-        binding.bottomNavigation.setOnItemSelectedListener { item ->
-            refreshUI(item.itemId)
-            true
-        }
-
-        // --- ОБРАБОТКА КНОПКИ "НАЗАД" (Для выхода из папок) ---
-        // Системный жест "Назад"
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (openedFolderStatus != null) {
-                    closeFolder()
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                }
-            }
-        })
-
-        // Стрелочка в Тулбаре
-        binding.toolbar.setNavigationOnClickListener {
-            if (openedFolderStatus != null) {
-                closeFolder()
-            }
+        setContent {
+            MainScreen()
         }
     }
-
-
 
     override fun onResume() {
         super.onResume()
         viewModel.refreshFavorites()
     }
 
-    private fun refreshUI(itemId: Int = binding.bottomNavigation.selectedItemId) {
-        val currentAnime = viewModel.allAnime.value ?: emptyList()
-        val statuses = viewModel.animeStatuses.value ?: emptyMap()
-        val savedIds = statuses.keys
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun MainScreen() {
+        // Подписки на данные
+        val allAnime by viewModel.allAnime.observeAsState(emptyList())
+        val localAnime by viewModel.localAnime.observeAsState(emptyList())
+        val statuses by viewModel.animeStatuses.observeAsState(emptyMap())
+        val customBadges by viewModel.animeCustomBadges.observeAsState(emptyMap())
+        val customPreviews by viewModel.customFolderPreviews.observeAsState(emptyList())
+        val customFolderAnime by viewModel.customFolderAnime.observeAsState(emptyMap())
 
-        // Если мы переключаем вкладку, сбрасываем открытую папку и стрелочку
-        if (itemId != R.id.menu_lists) {
-            openedFolderStatus = null
-            binding.toolbar.navigationIcon = null
+        // Состояния UI
+        var currentTab by remember { mutableIntStateOf(0) }
+        var isFavoritesOnly by remember { mutableStateOf(false) }
+        var sortMethod by remember { mutableIntStateOf(0) }
+        var openedFolderId by remember { mutableStateOf<String?>(null) }
+        var openedFolderTitle by remember { mutableStateOf("") }
+
+        // Системный BackButton: закрывает папку, если она открыта
+        BackHandler(enabled = openedFolderId != null) {
+            openedFolderId = null
         }
 
-        when (itemId) {
-            R.id.menu_home -> {
-                binding.btnSearch.visibility = View.VISIBLE    // Показываем лупу
-                binding.btnNotesHub.visibility = View.GONE     // Прячем Хаб
-                binding.toolbar.title = "AniMouse | Онгоинги"
-                showAnime(currentAnime, savedIds)
+        Scaffold(
+            bottomBar = {
+                NavigationBar(containerColor = Color(0xFF121212)) {
+                    NavigationBarItem(
+                        icon = { Icon(painterResource(R.drawable.ic_eye_sol), contentDescription = "Онгоинги", modifier = Modifier.size(24.dp)) },
+                        label = { Text("Онгоинги") },
+                        selected = currentTab == 0,
+                        onClick = { currentTab = 0; openedFolderId = null },
+                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF00BFA5), unselectedIconColor = Color(0xFFAAAAAA), indicatorColor = Color.Transparent)
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(painterResource(R.drawable.ic_calendar_sol), contentDescription = "Расписание", modifier = Modifier.size(24.dp)) },
+                        label = { Text("Расписание") },
+                        selected = currentTab == 1,
+                        onClick = { currentTab = 1; openedFolderId = null },
+                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF00BFA5), unselectedIconColor = Color(0xFFAAAAAA), indicatorColor = Color.Transparent)
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(painterResource(R.drawable.ic_bookmark_sol), contentDescription = "Списки", modifier = Modifier.size(24.dp)) },
+                        label = { Text("Списки") },
+                        selected = currentTab == 2,
+                        onClick = { currentTab = 2 },
+                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF00BFA5), unselectedIconColor = Color(0xFFAAAAAA), indicatorColor = Color.Transparent)
+                    )
+                }
             }
-            R.id.menu_schedule -> {
-                binding.btnSearch.visibility = View.VISIBLE
-                binding.btnNotesHub.visibility = View.GONE
-                binding.toolbar.title = "AniMouse | Календарь аниме"
-                showSchedule(currentAnime, savedIds)
-            }
-            R.id.menu_lists -> {
-                binding.btnSearch.visibility = View.GONE       // Прячем лупу
-                binding.btnNotesHub.visibility = View.VISIBLE  // Показываем закладку Хаба
+        ) { paddingValues ->
+            Column(modifier = Modifier.fillMaxSize().background(Color(0xFF121212)).padding(paddingValues)) {
 
-                if (openedFolderStatus != null) {
-                    // (Твой текущий код для открытой папки...)
-                    val title = when (openedFolderStatus) {
-                        "WATCHING" -> "Смотрю"
-// ... остальное не трогай
-                        "PLANNED" -> "В планах"
-                        "COMPLETED" -> "Просмотрено"
-                        "DROPPED" -> "Брошено"
-                        else -> {
-                            // Если это кастомная папка, вытаскиваем её имя из списка
-                            val listId = openedFolderStatus!!.removePrefix("custom_").toIntOrNull()
-                            viewModel.customFolderPreviews.value?.find { it.id == listId }?.name ?: "Список"
+                // --- ТУЛБАР ---
+                Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (openedFolderId != null) {
+                        IconButton(onClick = { openedFolderId = null }) { Icon(painterResource(R.drawable.ic_arrow_reg), "Назад", tint = Color.White) }
+                        Text("Списки | $openedFolderTitle", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    } else {
+                        val title = when (currentTab) { 0 -> "Онгоинги"; 1 -> "Календарь аниме"; else -> "Списки аниме" }
+                        Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).clickable { Toast.makeText(this@MainActivity, "AniMouse v1.0", Toast.LENGTH_SHORT).show() })
+
+                        if (currentTab == 2) {
+                            IconButton(onClick = { startActivity(Intent(this@MainActivity, NotesHubActivity::class.java)) }) {
+                                Icon(painterResource(R.drawable.ic_pencil_square_sol), "Заметки", tint = Color(0xFF00BFA5))
+                            }
+                        } else {
+                            IconButton(onClick = { startActivity(Intent(this@MainActivity, SearchActivity::class.java)) }) {
+                                Icon(painterResource(R.drawable.ic_search_reg), "Поиск", tint = Color(0xFF00BFA5))
+                            }
                         }
                     }
-                    openFolder(openedFolderStatus!!, title)
-                } else {
-                    binding.toolbar.title = "AniMouse | Списки аниме"
-                    binding.toolbar.navigationIcon = null
-                    showListsScreen(currentAnime, statuses)
                 }
-            }
-        }
-    }
 
-    // --- ЛОГИКА ВЛОЖЕННЫХ ПАПОК ---
-    private fun openFolder(statusId: String, title: String) {
-        if (statusId == "separator") return // Защита от клика по разделителю
-
-        openedFolderStatus = statusId
-        binding.toolbar.title = "Списки | $title"
-        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_reg)
-
-        binding.layoutListsHeader.visibility = View.GONE
-        binding.recyclerAnime.layoutManager = GridLayoutManager(this, 2)
-
-        val localAnimeList = viewModel.localAnime.value ?: emptyList()
-        val statuses = viewModel.animeStatuses.value ?: emptyMap()
-
-        // НОВОЕ: Читаем из шпаргалки для бейджиков
-        val customBadges = viewModel.animeCustomBadges.value ?: emptyMap()
-
-        // Умная фильтрация
-        val folderAnime = if (statusId.startsWith("custom_")) {
-            val listId = statusId.removePrefix("custom_").toInt()
-            val customMap = viewModel.customFolderAnime.value ?: emptyMap()
-            customMap[listId]?.map { mapEntityToAnime(it) } ?: emptyList()
-        } else {
-            localAnimeList.filter { it.status == statusId }.map { mapEntityToAnime(it) }
-        }
-
-// Передаем emptyMap() вторым (чтобы скрыть статус папки), а customBadges - третьим (чтобы вернуть цветные теги)
-        binding.recyclerAnime.adapter = AnimeAdapter(folderAnime, emptyMap(), customBadges) { anime, _ ->
-            showBottomSheetDialog(anime)
-        }
-    }
-
-    private fun closeFolder() {
-        openedFolderStatus = null
-        binding.toolbar.navigationIcon = null
-        refreshUI(R.id.menu_lists) // Перерисовываем главный экран списков
-    }
-
-    // --- ВЫНЕСЕННОЕ МЕНЮ BOTTOM SHEET ---
-// --- ВЫНЕСЕННОЕ МЕНЮ BOTTOM SHEET ---
-    private fun showBottomSheetDialog(anime: Anime) {
-        try {
-            val bottomSheetDialog = BottomSheetDialog(this@MainActivity)
-            val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_status, null)
-            bottomSheetDialog.setContentView(sheetView)
-
-            val titleView = sheetView.findViewById<android.widget.TextView>(R.id.textSheetTitle)
-            titleView.text = anime.title.romaji
-
-            sheetView.findViewById<View>(R.id.btnWatching).setOnClickListener {
-                viewModel.setAnimeStatus(anime.id, "WATCHING")
-                bottomSheetDialog.dismiss()
-            }
-            sheetView.findViewById<View>(R.id.btnPlanned).setOnClickListener {
-                viewModel.setAnimeStatus(anime.id, "PLANNED")
-                bottomSheetDialog.dismiss()
-            }
-            sheetView.findViewById<View>(R.id.btnCompleted).setOnClickListener {
-                viewModel.setAnimeStatus(anime.id, "COMPLETED")
-                bottomSheetDialog.dismiss()
-            }
-            sheetView.findViewById<View>(R.id.btnDropped).setOnClickListener {
-                viewModel.setAnimeStatus(anime.id, "DROPPED")
-                bottomSheetDialog.dismiss()
-            }
-            sheetView.findViewById<View>(R.id.btnRemove).setOnClickListener {
-                viewModel.removeAnimeFromLists(anime.id)
-                bottomSheetDialog.dismiss()
-            }
-
-            sheetView.findViewById<View>(R.id.btnCreateCustomList).setOnClickListener {
-                bottomSheetDialog.dismiss()
-                showCustomListManageDialog()
-            }
-
-            // === КРАСИВАЯ ОТРИСОВКА КАСТОМНЫХ СПИСКОВ (КАК В DETAILS) ===
-            val container = sheetView.findViewById<android.widget.LinearLayout>(R.id.layoutCustomListsContainer)
-            container.removeAllViews()
-
-            val customLists = viewModel.customFolderPreviews.value ?: emptyList()
-            val customAnimeMap = viewModel.customFolderAnime.value ?: emptyMap()
-
-            if (customLists.isEmpty()) {
-                val emptyText = android.widget.TextView(this@MainActivity).apply {
-                    text = "Нет созданных списков"
-                    setTextColor(getColor(R.color.text_secondary))
-                    setPadding(0, 8, 0, 8)
-                }
-                container.addView(emptyText)
-            } else {
-                for (listPreview in customLists) {
-                    val itemView = layoutInflater.inflate(R.layout.item_custom_list_option, container, false)
-                    val indicator = itemView.findViewById<View>(R.id.indicatorListColor)
-                    val textName = itemView.findViewById<android.widget.TextView>(R.id.textCustomListName)
-                    val iconCheck = itemView.findViewById<android.widget.ImageView>(R.id.iconCheck)
-
-                    textName.text = listPreview.name
-                    val parsedColor = android.graphics.Color.parseColor(listPreview.colorHex)
-                    indicator.backgroundTintList = android.content.res.ColorStateList.valueOf(parsedColor)
-
-                    // Проверяем, есть ли уже аниме в этом списке
-                    val isAlreadyInList = customAnimeMap[listPreview.id]?.any { it.animeId == anime.id } == true
-
-                    if (isAlreadyInList) {
-                        iconCheck.visibility = android.view.View.VISIBLE
-                        iconCheck.imageTintList = android.content.res.ColorStateList.valueOf(parsedColor)
-                        textName.setTextColor(parsedColor)
+                // --- КОНТЕНТ ---
+                if (openedFolderId != null) {
+                    // Рендер открытой папки
+                    val folderAnime = if (openedFolderId!!.startsWith("custom_")) {
+                        val listId = openedFolderId!!.removePrefix("custom_").toInt()
+                        customFolderAnime[listId]?.map { mapEntityToAnime(it) } ?: emptyList()
                     } else {
-                        iconCheck.visibility = android.view.View.GONE
-                        textName.setTextColor(getColor(R.color.text_primary))
+                        localAnime.filter { it.status == openedFolderId }.map { mapEntityToAnime(it) }
                     }
+                    AnimeGrid(folderAnime, emptyMap(), customBadges) // Внутри папки системный статус не пишем
+                } else {
+                    when (currentTab) {
+                        0 -> {
+                            // ОНГОИНГИ
+                            FiltersBar(sortMethod, { sortMethod = (sortMethod + 1) % 4 }, isFavoritesOnly, { isFavoritesOnly = it })
+                            val processedList = allAnime.filter { if (isFavoritesOnly) statuses.containsKey(it.id) else true }.let { list ->
+                                when (sortMethod) {
+                                    0 -> list.sortedByDescending { it.averageScore ?: 0 }
+                                    1 -> list.sortedBy { it.averageScore ?: 0 }
+                                    2 -> list.sortedByDescending { it.nextAiringEpisode?.episode ?: 0 }
+                                    3 -> list.sortedBy { it.nextAiringEpisode?.episode ?: 0 }
+                                    else -> list.sortedByDescending { it.averageScore ?: 0 }
+                                }
+                            }
+                            AnimeGrid(processedList, statuses, customBadges)
+                        }
+                        1 -> {
+                            // РАСПИСАНИЕ
+                            FiltersBar(sortMethod, { sortMethod = (sortMethod + 1) % 4 }, isFavoritesOnly, { isFavoritesOnly = it })
+                            ScheduleView(allAnime, isFavoritesOnly, customBadges)
+                        }
+                        2 -> {
+                            // СПИСКИ
+                            ListsView(statuses, localAnime, customPreviews, customFolderAnime,
+                                onOpenFolder = { id, title -> openedFolderId = id; openedFolderTitle = title }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-                    // Обработка клика по всему пункту списка
-                    itemView.setOnClickListener {
+    // --- КОМПОНЕНТ: ПАНЕЛЬ ФИЛЬТРОВ ---
+    @Composable
+    fun FiltersBar(sortMethod: Int, onSortClick: () -> Unit, isFavoritesOnly: Boolean, onFavoritesChange: (Boolean) -> Unit) {
+        val sortText = arrayOf("По популярности ↓", "По популярности ↑", "По эпизодам ↓", "По эпизодам ↑")[sortMethod]
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).background(Color(0xFF2A2A2A), RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 8.dp).clickable { onSortClick() }, verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(R.drawable.ic_sort_reg), "Сортировка", tint = Color(0xFFAAAAAA), modifier = Modifier.size(20.dp))
+            Text(sortText, color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            Text("Только избранное", color = Color(0xFFAAAAAA), fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
+            Switch(checked = isFavoritesOnly, onCheckedChange = onFavoritesChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF00BFA5)))
+        }
+    }
 
-                        // Локальная функция для записи в БД
-                        fun updateCustomListDB(isAdding: Boolean) {
-                            kotlinx.coroutines.MainScope().launch(kotlinx.coroutines.Dispatchers.IO) {
-                                val db = androidx.room.Room.databaseBuilder(applicationContext, com.example.animouse.data.database.AppDatabase::class.java, "animouse_db").build()
-                                val crossRef = com.example.animouse.data.database.AnimeCustomListCrossRef(anime.id, listPreview.id)
-                                if (isAdding) db.customListDao().addAnimeToList(crossRef)
-                                else db.customListDao().removeAnimeFromList(crossRef)
-                                viewModel.updateLocalStatuses()
+    // --- КОМПОНЕНТ: СЕТКА КАРТОЧЕК (ОНГОИНГИ / ПАПКИ) ---
+    @Composable
+    fun AnimeGrid(animeList: List<Anime>, statuses: Map<Int, String>, customBadges: Map<Int, List<MainViewModel.CustomFolderPreview>>) {
+        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp)) {
+            items(animeList) { anime ->
+                val currentStatus = statuses[anime.id]
+                val (statusText, statusColor) = when (currentStatus) {
+                    "WATCHING" -> "Смотрю" to Color(0xFF00BFA5)
+                    "PLANNED" -> "В планах" to Color(0xFFFF9800)
+                    "COMPLETED" -> "Просмотрено" to Color(0xFF4CAF50)
+                    "DROPPED" -> "Брошено" to Color(0xFF757575)
+                    else -> null to Color.Transparent
+                }
+                AnimeCard(
+                    anime = anime, systemStatusText = statusText, systemStatusColor = statusColor, customBadges = customBadges[anime.id] ?: emptyList(),
+                    onClick = { navigateToDetails(anime) },
+                    onLongClick = { showBottomSheetDialog(anime) }
+                )
+            }
+        }
+    }
+
+    // --- КОМПОНЕНТ: РАСПИСАНИЕ ---
+    @Composable
+    fun ScheduleView(animeList: List<Anime>, isFavoritesOnly: Boolean, customBadges: Map<Int, List<MainViewModel.CustomFolderPreview>>) {
+        var selectedDay by remember { mutableIntStateOf(getTodayIndex()) }
+        val daysTitles = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+        ScrollableTabRow(selectedTabIndex = selectedDay, containerColor = Color.Transparent, contentColor = Color(0xFF00BFA5), edgePadding = 8.dp, divider = {}) {
+            daysTitles.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedDay == index, onClick = { selectedDay = index },
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp).background(if (selectedDay == index) Color(0xFF00BFA5) else Color(0xFF2A2A2A), RoundedCornerShape(16.dp))
+                ) {
+                    Text(title, color = if (selectedDay == index) Color(0xFF121212) else Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+            }
+        }
+
+        val dayAnime = animeList.filter { anime ->
+            val airingAt = anime.nextAiringEpisode?.airingAt
+            val isCorrectDay = airingAt != null && getDayOfWeekFromTimestamp(airingAt) == selectedDay
+            val passFilter = if (isFavoritesOnly) NotificationHelper.isNotificationEnabled(this, anime.id) else true
+            isCorrectDay && passFilter
+        }.sortedBy { it.nextAiringEpisode?.airingAt }
+
+        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+            items(dayAnime) { anime ->
+                val airingAt = anime.nextAiringEpisode?.airingAt
+                val formattedTime = if (airingAt != null) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(airingAt * 1000L)) else "--:--"
+                var isNotifying by remember { mutableStateOf(NotificationHelper.isNotificationEnabled(this@MainActivity, anime.id)) }
+
+                AnimeListCard(
+                    anime = anime, customBadges = customBadges[anime.id] ?: emptyList(), airingTime = formattedTime, isNotificationEnabled = isNotifying,
+                    onNotificationClick = {
+                        val airingAtSafe = anime.nextAiringEpisode?.airingAt?.toLong() ?: 0L
+                        val episode = anime.nextAiringEpisode?.episode ?: 0
+                        isNotifying = NotificationHelper.toggleNotification(this@MainActivity, anime.id, anime.title.romaji ?: "Аниме", airingAtSafe, episode)
+                        Toast.makeText(this@MainActivity, if (isNotifying) "Мыш напомнит!" else "Промолчу!", Toast.LENGTH_SHORT).show()
+                    },
+                    onClick = { navigateToDetails(anime) },
+                    onLongClick = { showBottomSheetDialog(anime) }
+                )
+            }
+        }
+    }
+
+    // --- КОМПОНЕНТ: СПИСКИ (Диаграмма и папки) ---
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    fun ListsView(
+        statuses: Map<Int, String>, localAnime: List<UserAnimeEntity>, customPreviews: List<MainViewModel.CustomFolderPreview>,
+        customFolderAnime: Map<Int, List<UserAnimeEntity>>, onOpenFolder: (String, String) -> Unit
+    ) {
+        val wCount = statuses.values.count { it == "WATCHING" }
+        val pCount = statuses.values.count { it == "PLANNED" }
+        val cCount = statuses.values.count { it == "COMPLETED" }
+        val dCount = statuses.values.count { it == "DROPPED" }
+        val total = wCount + pCount + cCount + dCount
+
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item {
+                // Карточка с диаграммой
+                Card(modifier = Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)), shape = RoundedCornerShape(20.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Всего в списках: $total", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 12.dp))
+
+                        // Цветная полоска диаграммы
+                        if (total > 0) {
+                            Row(modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))) {
+                                if (wCount > 0) Box(modifier = Modifier.weight(wCount.toFloat()).fillMaxHeight().background(Color(0xFF00BFA5)))
+                                if (pCount > 0) Box(modifier = Modifier.weight(pCount.toFloat()).fillMaxHeight().background(Color(0xFFFF9800)))
+                                if (cCount > 0) Box(modifier = Modifier.weight(cCount.toFloat()).fillMaxHeight().background(Color(0xFF4CAF50)))
+                                if (dCount > 0) Box(modifier = Modifier.weight(dCount.toFloat()).fillMaxHeight().background(Color(0xFF4B5563)))
                             }
                         }
 
-                        if (isAlreadyInList) {
-                            com.google.android.material.dialog.MaterialAlertDialogBuilder(this@MainActivity)
-                                .setTitle("Удалить из списка?")
-                                .setMessage("Вы уверены, что хотите убрать тайтл из списка «${listPreview.name}»?")
-                                .setPositiveButton("Удалить") { _, _ ->
-                                    updateCustomListDB(false)
-                                    bottomSheetDialog.dismiss()
-                                }
-                                .setNegativeButton("Отмена", null)
-                                .show()
-                        } else {
-                            updateCustomListDB(true)
-                            bottomSheetDialog.dismiss()
+                        // Легенда
+                        Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                LegendItem(Color(0xFF00BFA5), "Смотрю: $wCount")
+                                LegendItem(Color(0xFF4CAF50), "Просмотрено: $cCount")
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                LegendItem(Color(0xFFFF9800), "В планах: $pCount")
+                                LegendItem(Color(0xFF4B5563), "Брошено: $dCount")
+                            }
                         }
+
+                        Text("+ Создать пользовательский список", color = Color(0xFF00BFA5), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clickable { showCustomListManageDialog() })
                     }
-                    container.addView(itemView)
                 }
             }
 
-            bottomSheetDialog.show()
-        } catch (e: Exception) {
-            Toast.makeText(this@MainActivity, "Ошибка меню: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
+            // Системные папки
+            item { FolderRow("WATCHING", "Смотрю", wCount, localAnime, statuses, Color(0xFF00BFA5), onOpenFolder) }
+            item { FolderRow("PLANNED", "В планах", pCount, localAnime, statuses, Color(0xFFFF9800), onOpenFolder) }
+            item { FolderRow("COMPLETED", "Просмотрено", cCount, localAnime, statuses, Color(0xFF4CAF50), onOpenFolder) }
+            item { FolderRow("DROPPED", "Брошено", dCount, localAnime, statuses, Color(0xFF4B5563), onOpenFolder) }
 
-
-    private fun showSchedule(animeList: List<Anime>, savedIds: Set<Int>) {
-        // (Твой текущий рабочий код showSchedule)
-        binding.recyclerAnime.visibility = View.GONE
-        binding.tabLayout.visibility = View.VISIBLE
-        binding.layoutFilters.visibility = View.VISIBLE
-        binding.viewPager.visibility = View.VISIBLE
-        binding.layoutListsHeader.visibility = View.GONE
-
-        binding.layoutFilters.setOnClickListener(null)
-        binding.iconSort.setImageResource(R.drawable.ic_filter_funnel_reg)
-        binding.textSortTitle.text = "Все тайтлы"
-
-        val daysTitles = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
-        val calendar = Calendar.getInstance()
-        calendar.firstDayOfWeek = Calendar.MONDAY
-        calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-
-        val datesNumbers = mutableListOf<String>()
-        for (i in 0..6) {
-            datesNumbers.add(calendar.get(Calendar.DAY_OF_MONTH).toString())
-            calendar.add(Calendar.DAY_OF_MONTH, 1)
-        }
-
-        val isFavoritesOnly = binding.switchFavorites.isChecked
-
-        val groupedAnime = List(7) { dayIndex ->
-            animeList.filter { anime ->
-                val airingAt = anime.nextAiringEpisode?.airingAt
-                val isCorrectDay = airingAt != null && getDayOfWeekFromTimestamp(airingAt) == dayIndex
-
-                // === НОВЫЙ ФИЛЬТР ПО КОЛОКОЛЬЧИКАМ ===
-                val passFilter = if (isFavoritesOnly) {
-                    com.example.animouse.data.NotificationHelper.isNotificationEnabled(this, anime.id)
-                } else true
-
-                isCorrectDay && passFilter
-            }.sortedBy { it.nextAiringEpisode?.airingAt }
-        }
-        val currentItem = binding.viewPager.currentItem
-
-// Теперь адаптер сам разбирается с колокольчиками, передаем ему только список аниме!
-        binding.viewPager.adapter = SchedulePagerAdapter(groupedAnime)
-
-        tabLayoutMediator?.detach()
-        tabLayoutMediator = TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
-            tab.setCustomView(R.layout.item_tab_day)
-            val customView = tab.customView
-            val textDayName = customView?.findViewById<android.widget.TextView>(R.id.textDayName)
-            val textDayNumber = customView?.findViewById<android.widget.TextView>(R.id.textDayNumber)
-            textDayName?.text = daysTitles[position]
-            textDayNumber?.text = datesNumbers[position]
-        }
-        tabLayoutMediator?.attach()
-
-        if (currentItem == 0 && !isFavoritesOnly) {
-            binding.viewPager.setCurrentItem(getTodayIndex(), false)
-        } else {
-            binding.viewPager.setCurrentItem(currentItem, false)
-        }
-
-        // 1. Сначала достаем теги из ВьюМодели
-        val customBadges = viewModel.animeCustomBadges.value ?: emptyMap()
-
-        // 2. Обязательно передаем их вторым параметром в SchedulePagerAdapter!
-        binding.viewPager.adapter = SchedulePagerAdapter(groupedAnime, customBadges)
-    }
-
-    private fun showAnime(animeList: List<Anime>, savedIds: Set<Int>) {
-        binding.tabLayout.visibility = View.GONE
-        binding.viewPager.visibility = View.GONE
-        binding.recyclerAnime.visibility = View.VISIBLE
-        binding.layoutListsHeader.visibility = View.GONE
-
-        binding.recyclerAnime.layoutManager = GridLayoutManager(this, 2)
-
-        binding.layoutFilters.visibility = View.VISIBLE
-        binding.iconSort.setImageResource(R.drawable.ic_sort_reg)
-
-        val sortText = when (ongoingSortMethod) {
-            0 -> "По популярности ↓"
-            1 -> "По популярности ↑"
-            2 -> "По эпизодам ↓"
-            3 -> "По эпизодам ↑"
-            else -> "По популярности ↓"
-        }
-        binding.textSortTitle.text = sortText
-
-        binding.layoutFilters.setOnClickListener {
-            ongoingSortMethod = (ongoingSortMethod + 1) % 4
-            refreshUI()
-        }
-
-        val isFavoritesOnly = binding.switchFavorites.isChecked
-
-        val processedList = animeList.filter { anime ->
-            if (isFavoritesOnly) savedIds.contains(anime.id) else true
-        }.let { filteredList ->
-            when (ongoingSortMethod) {
-                0 -> filteredList.sortedByDescending { it.averageScore ?: 0 }
-                1 -> filteredList.sortedBy { it.averageScore ?: 0 }
-                2 -> filteredList.sortedByDescending { it.nextAiringEpisode?.episode ?: 0 }
-                3 -> filteredList.sortedBy { it.nextAiringEpisode?.episode ?: 0 }
-                else -> filteredList.sortedByDescending { it.averageScore ?: 0 }
-            }
-        }
-        val allStatuses = viewModel.animeStatuses.value ?: emptyMap()
-        // Вытаскиваем шпаргалку по плашкам из вьюмодели:
-        val customBadges = viewModel.animeCustomBadges.value ?: emptyMap()
-
-        // Передаем customBadges третьим параметром
-        binding.recyclerAnime.adapter = AnimeAdapter(processedList, allStatuses, customBadges) { anime, _ ->
-            showBottomSheetDialog(anime)
-        }
-
-    }
-
-    private fun showListsScreen(animeList: List<Anime>, statuses: Map<Int, String>) {
-        binding.tabLayout.visibility = View.GONE
-        binding.viewPager.visibility = View.GONE
-        binding.layoutFilters.visibility = View.GONE
-        binding.recyclerAnime.visibility = View.VISIBLE
-
-        binding.layoutListsHeader.visibility = View.VISIBLE
-
-        binding.layoutListsHeader.visibility = View.VISIBLE
-
-        // Клик по кнопке на плашке хаба вызывает наш RGB колорпикер
-        binding.layoutListsHeader.findViewById<View>(R.id.btnCreateListFromHub).setOnClickListener {
-            showCustomListManageDialog()
-        }
-
-        var countWatching = 0
-        var countPlanned = 0
-        var countCompleted = 0
-        var countDropped = 0
-
-        statuses.values.forEach { status ->
-            when (status) {
-                "WATCHING" -> countWatching++
-                "PLANNED" -> countPlanned++
-                "COMPLETED" -> countCompleted++
-                "DROPPED" -> countDropped++
-            }
-        }
-        val totalCount = countWatching + countPlanned + countCompleted + countDropped
-
-        binding.textTotalAnime.text = "Всего в списках: $totalCount"
-        binding.legendWatching.text = "Смотрю: $countWatching"
-        binding.legendPlanned.text = "В планах: $countPlanned"
-        binding.legendCompleted.text = "Просмотрено: $countCompleted"
-        binding.legendDropped.text = "Брошено: $countDropped"
-
-        binding.layoutChartBar.weightSum = if (totalCount > 0) totalCount.toFloat() else 1f
-
-        fun updateBarWeight(view: View, weight: Int) {
-            val params = view.layoutParams as android.widget.LinearLayout.LayoutParams
-            params.weight = weight.toFloat()
-            view.layoutParams = params
-        }
-
-        updateBarWeight(binding.barWatching, countWatching)
-        updateBarWeight(binding.barPlanned, countPlanned)
-        updateBarWeight(binding.barCompleted, countCompleted)
-        updateBarWeight(binding.barDropped, countDropped)
-
-        // Конвертируем ВСЕ локальные данные для превьюшек папок
-        val allLocalAsAnime = viewModel.localAnime.value?.map { mapEntityToAnime(it) } ?: emptyList()
-
-        val watchingAnime = allLocalAsAnime.filter { statuses[it.id] == "WATCHING" }
-        val plannedAnime = allLocalAsAnime.filter { statuses[it.id] == "PLANNED" }
-        val completedAnime = allLocalAsAnime.filter { statuses[it.id] == "COMPLETED" }
-        val droppedAnime = allLocalAsAnime.filter { statuses[it.id] == "DROPPED" }
-
-        // 1. Создаем изменяемый список и кладем туда системные папки
-        val allFolders = mutableListOf(
-            FolderItem("WATCHING", "Смотрю", countWatching, watchingAnime.randomOrNull()?.coverImage?.large, R.color.turquoise_secondary),
-            FolderItem("PLANNED", "В планах", countPlanned, plannedAnime.randomOrNull()?.coverImage?.large, R.color.orange_accent),
-            FolderItem("COMPLETED", "Просмотрено", countCompleted, completedAnime.randomOrNull()?.coverImage?.large, R.color.green_accent),
-            FolderItem("DROPPED", "Брошено", countDropped, droppedAnime.randomOrNull()?.coverImage?.large, R.color.bg_dark_deep)
-        )
-
-        // 2. Достаем кастомные папки из ViewModel и добавляем их следом
-        val customPreviews = viewModel.customFolderPreviews.value ?: emptyList()
-
-        if (customPreviews.isNotEmpty()) {
-            allFolders.add(FolderItem("separator", "Пользовательские списки", 0, null, isSeparator = true))
-        }
-        for (preview in customPreviews) {
-            allFolders.add(
-                FolderItem(
-                    id = "custom_${preview.id}", // Маркируем кастомные папки префиксом
-                    title = preview.name,
-                    count = preview.count,
-                    posterUrl = preview.randomPosterUrl,
-                    indicatorColorHex = preview.colorHex // Передаем HEX цвет
-                )
-            )
-        }
-
-        binding.recyclerAnime.layoutManager = LinearLayoutManager(this)
-
-        // Передаем список, обработчик клика и НОВЫЙ обработчик лонг-клика
-        binding.recyclerAnime.adapter = ListsFolderAdapter(allFolders,
-            onFolderClick = { folderId ->
-                val title = allFolders.find { it.id == folderId }?.title ?: "Список"
-                openFolder(folderId, title)
-            },
-            onFolderLongClick = { folderId ->
-                // Разделитель не трогаем
-                if (folderId == "separator") return@ListsFolderAdapter
-
-                val title = allFolders.find { it.id == folderId }?.title ?: "Список"
-
-                // Достаем список аниме для любой папки (и кастомной, и системной)
-                val animeListToShare = if (folderId.startsWith("custom_")) {
-                    val listId = folderId.removePrefix("custom_").toInt()
-                    viewModel.customFolderAnime.value?.get(listId) ?: emptyList()
-                } else {
-                    val statuses = viewModel.animeStatuses.value ?: emptyMap()
-                    viewModel.localAnime.value?.filter { statuses[it.animeId] == folderId } ?: emptyList()
-                }
-
-                if (folderId.startsWith("custom_")) {
-                    val listId = folderId.removePrefix("custom_").toInt()
-                    val currentFolder = customPreviews.find { it.id == listId } ?: return@ListsFolderAdapter
-
-                    // 1. МЕНЮ ДЛЯ КАСТОМНЫХ СПИСКОВ (Все 3 действия)
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                        .setTitle("Управление списком")
-                        .setMessage("Что вы хотите сделать со списком «${currentFolder.name}»?")
-                        .setPositiveButton("Поделиться") { _, _ ->
-                            shareList(currentFolder.name, animeListToShare)
-                        }
-                        .setNeutralButton("Редактировать") { _, _ ->
-                            showCustomListManageDialog(currentFolder.id, currentFolder.name, currentFolder.colorHex)
-                        }
-                        .setNegativeButton("Удалить") { _, _ ->
-                            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                                .setTitle("Удалить полностью?")
-                                .setMessage("Вы уверены? Сам список удалится, но тайтлы останутся в общей базе.")
-                                .setPositiveButton("Да, удалить") { _, _ ->
-                                    viewModel.deleteCustomList(currentFolder.id)
-                                    Toast.makeText(this, "Список удален", Toast.LENGTH_SHORT).show()
-                                }
-                                .setNegativeButton("Отмена", null)
-                                .show()
-                        }
-                        .show()
-                } else {
-                    // 2. МЕНЮ ДЛЯ СИСТЕМНЫХ СПИСКОВ (Только шаринг)
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                        .setTitle("Системный список: $title")
-                        .setMessage("Это базовый список. Его нельзя удалить или переименовать, но вы можете отправить его друзьям!")
-                        .setPositiveButton("Поделиться") { _, _ ->
-                            shareList(title, animeListToShare)
-                        }
-                        .show()
+            // Кастомные папки
+            if (customPreviews.isNotEmpty()) {
+                item { Text("Пользовательские списки", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp)) }
+                items(customPreviews) { preview ->
+                    FolderRow("custom_${preview.id}", preview.name, preview.count, emptyList(), emptyMap(), Color(android.graphics.Color.parseColor(preview.colorHex)), onOpenFolder, preview.randomPosterUrl, isCustom = true, listId = preview.id)
                 }
             }
-        )
+        }
     }
+
+    @Composable
+    fun LegendItem(color: Color, text: String) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+            Box(modifier = Modifier.size(10.dp).background(color, RoundedCornerShape(5.dp)))
+            Text(text, color = Color(0xFFAAAAAA), fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
+        }
+    }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    fun FolderRow(id: String, title: String, count: Int, localAnime: List<UserAnimeEntity>, statuses: Map<Int, String>, color: Color, onOpenFolder: (String, String) -> Unit, customPoster: String? = null, isCustom: Boolean = false, listId: Int = -1) {
+        val poster = customPoster ?: localAnime.firstOrNull { statuses[it.animeId] == id }?.posterUrl
+        Row(
+            modifier = Modifier.fillMaxWidth().combinedClickable(
+                onClick = { onOpenFolder(id, title) },
+                onLongClick = {
+                    val listToShare = if (isCustom) viewModel.customFolderAnime.value?.get(listId) ?: emptyList() else localAnime.filter { statuses[it.animeId] == id }
+                    if (isCustom) {
+                        MaterialAlertDialogBuilder(this@MainActivity)
+                            .setTitle("Управление").setMessage("Что сделать со списком «$title»?")
+                            .setPositiveButton("Поделиться") { _, _ -> shareList(title, listToShare) }
+                            .setNeutralButton("Редактировать") { _, _ -> showCustomListManageDialog(listId, title, String.format("#%06X", 0xFFFFFF and color.value.toInt())) }
+                            .setNegativeButton("Удалить") { _, _ -> viewModel.deleteCustomList(listId) }.show()
+                    } else {
+                        MaterialAlertDialogBuilder(this@MainActivity).setTitle("Системный список: $title").setMessage("Его нельзя удалить, но можно отправить друзьям!").setPositiveButton("Поделиться") { _, _ -> shareList(title, listToShare) }.show()
+                    }
+                }
+            ).padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF2A2A2A))) {
+                if (poster != null) AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+            Column(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
+                Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                Text("$count тайтлов", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+            Box(modifier = Modifier.width(4.dp).height(40.dp).background(color, RoundedCornerShape(2.dp)))
+        }
+    }
+
+    // --- НАВИГАЦИЯ И ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
+    private fun navigateToDetails(anime: Anime) {
+        startActivity(Intent(this, DetailsActivity::class.java).apply {
+            putExtra("EXTRA_ID", anime.id)
+            putExtra("EXTRA_ID_MAL", anime.idMal ?: -1)
+            putExtra("EXTRA_TITLE", anime.title.romaji)
+            putExtra("EXTRA_POSTER", anime.coverImage.large)
+            putExtra("EXTRA_SCORE", anime.averageScore ?: 0)
+            putExtra("EXTRA_EPISODES_TOTAL", anime.episodes ?: 0)
+            putStringArrayListExtra("EXTRA_GENRES", java.util.ArrayList(anime.genres ?: emptyList()))
+        })
+    }
+
+    // Все методы showBottomSheetDialog, shareList, getTodayIndex, getDayOfWeekFromTimestamp,
+    // mapEntityToAnime и showCustomListManageDialog остаются БЕЗ ИЗМЕНЕНИЙ!
+    // Просто вставь их сюда из своего старого MainActivity.kt
 
     private fun getTodayIndex(): Int {
         val dayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
         return when (dayOfWeek) {
-            Calendar.MONDAY -> 0
-            Calendar.TUESDAY -> 1
-            Calendar.WEDNESDAY -> 2
-            Calendar.THURSDAY -> 3
-            Calendar.FRIDAY -> 4
-            Calendar.SATURDAY -> 5
-            Calendar.SUNDAY -> 6
-            else -> 0
+            Calendar.MONDAY -> 0; Calendar.TUESDAY -> 1; Calendar.WEDNESDAY -> 2; Calendar.THURSDAY -> 3; Calendar.FRIDAY -> 4; Calendar.SATURDAY -> 5; Calendar.SUNDAY -> 6; else -> 0
         }
     }
-
-
 
     private fun getDayOfWeekFromTimestamp(timestampSec: Long): Int {
-        val cal = Calendar.getInstance()
-        cal.timeInMillis = timestampSec * 1000
+        val cal = Calendar.getInstance().apply { timeInMillis = timestampSec * 1000 }
         return when (cal.get(Calendar.DAY_OF_WEEK)) {
-            Calendar.MONDAY -> 0
-            Calendar.TUESDAY -> 1
-            Calendar.WEDNESDAY -> 2
-            Calendar.THURSDAY -> 3
-            Calendar.FRIDAY -> 4
-            Calendar.SATURDAY -> 5
-            Calendar.SUNDAY -> 6
-            else -> 0
+            Calendar.MONDAY -> 0; Calendar.TUESDAY -> 1; Calendar.WEDNESDAY -> 2; Calendar.THURSDAY -> 3; Calendar.FRIDAY -> 4; Calendar.SATURDAY -> 5; Calendar.SUNDAY -> 6; else -> 0
         }
     }
 
-    private fun mapEntityToAnime(entity: com.example.animouse.data.database.UserAnimeEntity): Anime {
-        return Anime(
-            id = entity.animeId,
-            idMal = entity.idMal,
-            title = com.example.animouse.data.model.Title(romaji = entity.title),
-            coverImage = com.example.animouse.data.model.CoverImage(large = entity.posterUrl ?: ""),
-            averageScore = entity.score,
-            episodes = entity.episodesTotal,
-            description = "Данные из оффлайн-списка",
-            genres = emptyList(),
+    private fun mapEntityToAnime(entity: UserAnimeEntity): Anime = Anime(
+        id = entity.animeId, idMal = entity.idMal, title = com.example.animouse.data.model.Title(romaji = entity.title),
+        coverImage = com.example.animouse.data.model.CoverImage(large = entity.posterUrl ?: ""), averageScore = entity.score,
+        episodes = entity.episodesTotal, description = "Данные из оффлайн-списка", genres = emptyList(), status = entity.animeStatus,
+        season = entity.season, seasonYear = entity.seasonYear, nextAiringEpisode = com.example.animouse.data.model.NextAiringEpisode(0, 0, entity.episodesAired + 1)
+    )
 
-            // Читаем твои поля из базы:
-            status = entity.animeStatus, // <-- ВОТ ТАК ПРАВИЛЬНО! Здесь хранится "FINISHED" или "RELEASING"
-            season = entity.season,
-            seasonYear = entity.seasonYear,
+    private fun showBottomSheetDialog(anime: Anime) {
+        try {
+            val bottomSheetDialog = BottomSheetDialog(this)
+            val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_status, null)
+            bottomSheetDialog.setContentView(sheetView)
 
-            nextAiringEpisode = com.example.animouse.data.model.NextAiringEpisode(
-                airingAt = 0,
-                timeUntilAiring = 0,
-                episode = entity.episodesAired + 1
-            )
-        )
+            sheetView.findViewById<android.widget.TextView>(R.id.textSheetTitle).text = anime.title.romaji
+            sheetView.findViewById<View>(R.id.btnWatching).setOnClickListener { viewModel.setAnimeStatus(anime.id, "WATCHING"); bottomSheetDialog.dismiss() }
+            sheetView.findViewById<View>(R.id.btnPlanned).setOnClickListener { viewModel.setAnimeStatus(anime.id, "PLANNED"); bottomSheetDialog.dismiss() }
+            sheetView.findViewById<View>(R.id.btnCompleted).setOnClickListener { viewModel.setAnimeStatus(anime.id, "COMPLETED"); bottomSheetDialog.dismiss() }
+            sheetView.findViewById<View>(R.id.btnDropped).setOnClickListener { viewModel.setAnimeStatus(anime.id, "DROPPED"); bottomSheetDialog.dismiss() }
+            sheetView.findViewById<View>(R.id.btnRemove).setOnClickListener { viewModel.removeAnimeFromLists(anime.id); bottomSheetDialog.dismiss() }
+            sheetView.findViewById<View>(R.id.btnCreateCustomList).setOnClickListener { bottomSheetDialog.dismiss(); showCustomListManageDialog() }
+
+            val container = sheetView.findViewById<android.widget.LinearLayout>(R.id.layoutCustomListsContainer)
+            container.removeAllViews()
+            val customLists = viewModel.customFolderPreviews.value ?: emptyList()
+            val customAnimeMap = viewModel.customFolderAnime.value ?: emptyMap()
+
+            for (listPreview in customLists) {
+                val itemView = layoutInflater.inflate(R.layout.item_custom_list_option, container, false)
+                val textName = itemView.findViewById<android.widget.TextView>(R.id.textCustomListName).apply { text = listPreview.name }
+                val parsedColor = android.graphics.Color.parseColor(listPreview.colorHex)
+                itemView.findViewById<View>(R.id.indicatorListColor).backgroundTintList = android.content.res.ColorStateList.valueOf(parsedColor)
+                val isAlreadyInList = customAnimeMap[listPreview.id]?.any { it.animeId == anime.id } == true
+
+                val iconCheck = itemView.findViewById<android.widget.ImageView>(R.id.iconCheck)
+                if (isAlreadyInList) {
+                    iconCheck.visibility = View.VISIBLE
+                    iconCheck.imageTintList = android.content.res.ColorStateList.valueOf(parsedColor)
+                    textName.setTextColor(parsedColor)
+                } else {
+                    iconCheck.visibility = View.GONE
+                    textName.setTextColor(getColor(R.color.text_primary))
+                }
+
+                itemView.setOnClickListener {
+                    if (isAlreadyInList) {
+                        MaterialAlertDialogBuilder(this).setTitle("Удалить из списка?").setMessage("Вы уверены, что хотите убрать тайтл из списка «${listPreview.name}»?")
+                            .setPositiveButton("Удалить") { _, _ -> viewModel.toggleAnimeInCustomList(anime.id, listPreview.id, false); bottomSheetDialog.dismiss() }.setNegativeButton("Отмена", null).show()
+                    } else {
+                        viewModel.toggleAnimeInCustomList(anime.id, listPreview.id, true)
+                        bottomSheetDialog.dismiss()
+                    }
+                }
+                container.addView(itemView)
+            }
+            bottomSheetDialog.show()
+        } catch (e: Exception) { Toast.makeText(this, "Ошибка меню: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 
     private fun showCustomListManageDialog(listId: Int? = null, currentName: String? = null, currentColorHex: String? = null) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_create_list, null)
-        val alertDialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setView(dialogView)
-            .setBackground(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            .create()
-
-        val textTitle = dialogView.findViewById<android.widget.TextView>(R.id.textDialogTitle)
+        val alertDialog = MaterialAlertDialogBuilder(this).setView(dialogView).setBackground(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)).create()
         val inputName = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.inputListName)
         val viewPreview = dialogView.findViewById<View>(R.id.viewColorPreview)
         val textHex = dialogView.findViewById<android.widget.TextView>(R.id.textColorHex)
-
         val seekRed = dialogView.findViewById<android.widget.SeekBar>(R.id.seekRed)
         val seekGreen = dialogView.findViewById<android.widget.SeekBar>(R.id.seekGreen)
         val seekBlue = dialogView.findViewById<android.widget.SeekBar>(R.id.seekBlue)
 
-        // Если прилетели данные — значит мы в режиме РЕАКТИРОВАНИЯ
         if (listId != null) {
-            textTitle.text = "Настройка списка"
-            inputName.setText(currentName)
-            textHex.text = currentColorHex
+            dialogView.findViewById<android.widget.TextView>(R.id.textDialogTitle).text = "Настройка списка"
+            inputName.setText(currentName); textHex.text = currentColorHex
             try {
                 val parsed = android.graphics.Color.parseColor(currentColorHex)
-                seekRed.progress = android.graphics.Color.red(parsed)
-                seekGreen.progress = android.graphics.Color.green(parsed)
-                seekBlue.progress = android.graphics.Color.blue(parsed)
+                seekRed.progress = android.graphics.Color.red(parsed); seekGreen.progress = android.graphics.Color.green(parsed); seekBlue.progress = android.graphics.Color.blue(parsed)
                 viewPreview.backgroundTintList = android.content.res.ColorStateList.valueOf(parsed)
-            } catch (e: Exception) { /* На случай кривого HEX */ }
+            } catch (e: Exception) { }
         }
 
-        // Логика динамического изменения цвета ползунками
         val rgbListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                val r = seekRed.progress
-                val g = seekGreen.progress
-                val b = seekBlue.progress
-                val computedColor = android.graphics.Color.rgb(r, g, b)
-
+                val computedColor = android.graphics.Color.rgb(seekRed.progress, seekGreen.progress, seekBlue.progress)
                 viewPreview.backgroundTintList = android.content.res.ColorStateList.valueOf(computedColor)
-                textHex.text = String.format("#%02X%02X%02X", r, g, b)
+                textHex.text = String.format("#%02X%02X%02X", seekRed.progress, seekGreen.progress, seekBlue.progress)
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
         }
-
-        seekRed.setOnSeekBarChangeListener(rgbListener)
-        seekGreen.setOnSeekBarChangeListener(rgbListener)
-        seekBlue.setOnSeekBarChangeListener(rgbListener)
-
+        seekRed.setOnSeekBarChangeListener(rgbListener); seekGreen.setOnSeekBarChangeListener(rgbListener); seekBlue.setOnSeekBarChangeListener(rgbListener)
         dialogView.findViewById<View>(R.id.btnCancelList).setOnClickListener { alertDialog.dismiss() }
-
         dialogView.findViewById<View>(R.id.btnSaveList).setOnClickListener {
             val name = inputName.text.toString().trim()
-            val hex = textHex.text.toString()
-
             if (name.isNotEmpty()) {
-                if (listId != null) {
-                    // Обновляем старый
-                    viewModel.updateCustomList(listId, name, hex)
-                    Toast.makeText(this, "Список обновлен", Toast.LENGTH_SHORT).show()
-                } else {
-                    // Создаем новый (для этого вызовем старый метод из БД через CrossRef)
-                    // Но чтобы не дублировать код, выполним прямую вставку:
-                    val database = androidx.room.Room.databaseBuilder(applicationContext, com.example.animouse.data.database.AppDatabase::class.java, "animouse_db").build()
-                    kotlinx.coroutines.MainScope().launch(kotlinx.coroutines.Dispatchers.IO) {
-                        database.customListDao().insertList(com.example.animouse.data.database.CustomListEntity(name = name, colorHex = hex))
-                        viewModel.updateLocalStatuses()
-                    }
-                    Toast.makeText(this, "Список '$name' создан", Toast.LENGTH_SHORT).show()
-                }
+                if (listId != null) { viewModel.updateCustomList(listId, name, textHex.text.toString()) } else { viewModel.createCustomList(name, textHex.text.toString()) }
                 alertDialog.dismiss()
-            } else {
-                inputName.error = "Введите название"
-            }
+            } else inputName.error = "Введите название"
         }
         alertDialog.show()
     }
 
-    private fun shareList(listName: String, animeList: List<com.example.animouse.data.database.UserAnimeEntity>) {
-        if (animeList.isEmpty()) {
-            Toast.makeText(this, "Этот список пока пуст!", Toast.LENGTH_SHORT).show()
-            return
-        }
+    private fun shareList(listName: String, animeList: List<UserAnimeEntity>) {
+        if (animeList.isEmpty()) { Toast.makeText(this, "Этот список пока пуст!", Toast.LENGTH_SHORT).show(); return }
         val sb = java.lang.StringBuilder("Название списка: $listName\n\n")
-        animeList.forEachIndexed { index, anime ->
-            sb.append("${index + 1}. ${anime.title} - https://shikimori.one/animes/${anime.idMal}\n")
-        }
-        sb.append("\nСписок подготовлен в приложении AniMouse ₍ᐢ•͈༝•͈ᐢ₎♡ ")
-
-        val shareIntent = android.content.Intent().apply {
-            action = android.content.Intent.ACTION_SEND
-            putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
-            type = "text/plain"
-        }
-        startActivity(android.content.Intent.createChooser(shareIntent, "Поделиться списком"))
+        animeList.forEachIndexed { index, anime -> sb.append("${index + 1}. ${anime.title} - https://shikimori.one/animes/${anime.idMal}\n") }
+        startActivity(Intent.createChooser(Intent().apply { action = Intent.ACTION_SEND; putExtra(Intent.EXTRA_TEXT, sb.toString()); type = "text/plain" }, "Поделиться списком"))
     }
-
 }

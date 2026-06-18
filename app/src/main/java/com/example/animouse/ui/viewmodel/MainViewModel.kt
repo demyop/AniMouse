@@ -1,34 +1,33 @@
-package com.example.animouse.ui.activity
+package com.example.animouse.ui.viewmodel
 
-import android.app.Application
 import android.util.Log
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
 import com.example.animouse.data.database.AppDatabase
 import com.example.animouse.data.database.UserAnimeEntity
 import com.example.animouse.data.model.Anime
 import com.example.animouse.data.repository.AnimeRepository
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel // 1. Говорим, что эта ViewModel использует Hilt
+class MainViewModel @Inject constructor(
+    private val database: AppDatabase // 2. Hilt сам принесет нам готовую базу!
+) : ViewModel() { // 3. Наследуемся от обычного ViewModel, Application больше не нужен
 
-    // Инициализируем обновленную БД с поддержкой деструктивной миграции
-    private val database = Room.databaseBuilder(
-        application,
-        AppDatabase::class.java,
-        "animouse_db"
-    ).fallbackToDestructiveMigration().build()
-
+    // Наш репозиторий (по-хорошему, его потом тоже надо будет инжектить через Hilt,
+    // но пока оставим так, чтобы не сломать логику)
     private val repository = AnimeRepository()
 
     private val _allAnime = MutableLiveData<List<Anime>>(emptyList())
     val allAnime: LiveData<List<Anime>> = _allAnime
 
-    private val _localAnime = MutableLiveData<List<com.example.animouse.data.database.UserAnimeEntity>>()
-    val localAnime: LiveData<List<com.example.animouse.data.database.UserAnimeEntity>> = _localAnime
+    private val _localAnime = MutableLiveData<List<UserAnimeEntity>>()
+    val localAnime: LiveData<List<UserAnimeEntity>> = _localAnime
 
     // Теперь храним карту: ID аниме -> Его статус ("WATCHING", "PLANNED" и т.д.)
     private val _animeStatuses = MutableLiveData<Map<Int, String>>(emptyMap())
@@ -36,7 +35,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadData()
-        updateLocalStatuses() // <-- Загрузит кастомные списки и плашки прямо на старте!
+        updateLocalStatuses() // Загрузит кастомные списки и плашки прямо на старте
     }
 
     private fun loadData() {
@@ -75,7 +74,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (animeFromList != null) {
                     // Если нашли в сети — сохраняем полную карточку
-                    val entity = com.example.animouse.data.database.UserAnimeEntity(
+                    val entity = UserAnimeEntity(
                         animeId = animeId,
                         idMal = animeFromList.idMal ?: -1,
                         status = status,
@@ -101,16 +100,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Метод для полного удаления тайтла из всех списков
     fun removeAnimeFromLists(animeId: Int) {
-        // Просто вызываем наш умный метод с null, он сам всё удалит и обновит UI!
         setAnimeStatus(animeId, null)
     }
 
-    // Шпаргалка 1: ID кастомной папки -> Список аниме в ней (чтобы открывать папки)
-    private val _customFolderAnime = MutableLiveData<Map<Int, List<com.example.animouse.data.database.UserAnimeEntity>>>()
-    val customFolderAnime: LiveData<Map<Int, List<com.example.animouse.data.database.UserAnimeEntity>>> = _customFolderAnime
+    // Шпаргалка 1: ID кастомной папки -> Список аниме в ней
+    private val _customFolderAnime = MutableLiveData<Map<Int, List<UserAnimeEntity>>>()
+    val customFolderAnime: LiveData<Map<Int, List<UserAnimeEntity>>> = _customFolderAnime
 
-    // Шпаргалка 2: ID аниме -> Превью кастомного списка (чтобы рисовать цветные плашки на карточках)
-// Меняем Map<Int, CustomFolderPreview> на Map<Int, List<CustomFolderPreview>>
+    // Шпаргалка 2: ID аниме -> Список превью кастомных списков
     private val _animeCustomBadges = MutableLiveData<Map<Int, List<CustomFolderPreview>>>()
     val animeCustomBadges: LiveData<Map<Int, List<CustomFolderPreview>>> = _animeCustomBadges
 
@@ -125,12 +122,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _animeStatuses.value = savedAnime.filter { it.status != null }
                 .associate { it.animeId to it.status!! }
 
-// 2. НОВОЕ: Собираем кастомные списки и генерируем превью для папок
+            // 2. Собираем кастомные списки и генерируем превью для папок
             val allCustomLists = database.customListDao().getAllLists()
 
             val previews = mutableListOf<CustomFolderPreview>()
-            val folderAnimeMap = mutableMapOf<Int, List<com.example.animouse.data.database.UserAnimeEntity>>()
-            val badgeMap = mutableMapOf<Int, MutableList<CustomFolderPreview>>() // Теперь это список
+            val folderAnimeMap = mutableMapOf<Int, List<UserAnimeEntity>>()
+            val badgeMap = mutableMapOf<Int, MutableList<CustomFolderPreview>>()
 
             for (customList in allCustomLists) {
                 val animeInList = database.customListDao().getAnimeInList(customList.id)
@@ -154,10 +151,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Добавь это куда-нибудь в MainViewModel
     fun refreshFavorites() {
         viewModelScope.launch {
-            updateLocalStatuses() // Этот скрытый метод у нас уже есть в самом низу
+            updateLocalStatuses()
         }
     }
 
@@ -176,14 +172,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteCustomList(listId: Int) {
         viewModelScope.launch {
             database.customListDao().deleteList(listId)
-            updateLocalStatuses() // Мгновенно перерисовываем папки на главном экране
+            updateLocalStatuses()
         }
     }
 
     fun updateCustomList(listId: Int, newName: String, newColorHex: String) {
         viewModelScope.launch {
             val updatedList = com.example.animouse.data.database.CustomListEntity(
-                id = listId, // Привязываемся к старому ID, чтобы обновить, а не создать новый
+                id = listId,
                 name = newName,
                 colorHex = newColorHex
             )
@@ -192,6 +188,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleAnimeInCustomList(animeId: Int, listId: Int, isAdding: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val crossRef = com.example.animouse.data.database.AnimeCustomListCrossRef(animeId, listId)
+            if (isAdding) {
+                database.customListDao().addAnimeToList(crossRef)
+            } else {
+                database.customListDao().removeAnimeFromList(crossRef)
+            }
+            updateLocalStatuses()
+        }
+    }
+
+    fun createCustomList(name: String, colorHex: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val newList = com.example.animouse.data.database.CustomListEntity(name = name, colorHex = colorHex)
+            database.customListDao().insertList(newList)
+            updateLocalStatuses()
+        }
+    }
 }
-
-

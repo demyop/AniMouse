@@ -28,4 +28,18 @@ object RetrofitClient {
     val shikimoriApi: ShikimoriApi by lazy {
         shikimoriRetrofit.create(ShikimoriApi::class.java)
     }
+
+    private const val KODIK_BASE_URL = "https://kodikapi.info/"
+
+    // Это публичный токен, который часто используется в открытых парсерах
+    const val KODIK_PUBLIC_TOKEN = "7e930ed6c496660e7ee90a4dfb7c25c3"
+
+    val kodikApi: KodikApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(KODIK_BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(KodikApi::class.java)
+    }
+
 }
