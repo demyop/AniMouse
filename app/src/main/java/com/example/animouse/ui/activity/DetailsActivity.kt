@@ -52,6 +52,25 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import android.app.DownloadManager
+import android.content.Context
+import android.os.Environment
+import androidx.compose.foundation.lazy.itemsIndexed
+import android.content.ContentValues
+
+import android.graphics.Bitmap
+import android.os.Build
+import android.provider.MediaStore
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.drawable.toBitmap
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import com.example.animouse.ui.compose.ScreenshotViewerOverlay
+import kotlinx.coroutines.withContext
+
 
 
 @AndroidEntryPoint
@@ -88,7 +107,11 @@ class DetailsActivity : AppCompatActivity() {
             viewModel.loadNotes(currentAnimeId)
             viewModel.loadCustomListsData(currentAnimeId)
         }
-        viewModel.loadAnimeDetails(idMal)
+        // 👇 Безопасно обновляем данные с серверов
+        if (idMal != -1) {
+            viewModel.loadAnimeDetails(idMal)
+            viewModel.loadScreenshots(idMal)
+        }
         viewModel.loadAniListExtra(currentAnimeId, idMal)
 
         // 4. Отрисовываем интерфейс в Compose!
@@ -113,6 +136,8 @@ class DetailsActivity : AppCompatActivity() {
     @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
     @Composable
     fun DetailsScreen() {
+        var selectedScreenshotIndex by remember { mutableStateOf<Int?>(null) }
+        val screenshots by viewModel.screenshots.observeAsState(emptyList())
         val scrollState = rememberScrollState()
         val coroutineScope = rememberCoroutineScope()
         // Подписываемся на все LiveData
@@ -168,7 +193,13 @@ class DetailsActivity : AppCompatActivity() {
                             viewModel.loadNotes(currentAnimeId)
                             viewModel.loadCustomListsData(currentAnimeId)
                         }
-                        viewModel.loadAnimeDetails(idMal)
+                        // 👇 Безопасные вызовы к API Шикимори
+                        if (idMal != -1) {
+                            viewModel.loadAnimeDetails(idMal)
+                            viewModel.loadScreenshots(idMal)
+                        }
+
+                        // Вызов к API AniList
                         viewModel.loadAniListExtra(currentAnimeId, idMal)
 
                         // Небольшая искусственная задержка
@@ -220,7 +251,7 @@ class DetailsActivity : AppCompatActivity() {
                     )
                 }
 
-// 2. ИНФОРМАЦИОННЫЙ БЛОК (БЕЗ ДУБЛИКАТОВ И С СЕЗОНОМ)
+                // 2. ИНФОРМАЦИОННЫЙ БЛОК (БЕЗ ДУБЛИКАТОВ И С СЕЗОНОМ)
                 Column(modifier = Modifier.padding(horizontal = 20.dp).offset(y = (-40).dp)) {
                     Text(
                         text = displayTitle,
@@ -323,7 +354,47 @@ class DetailsActivity : AppCompatActivity() {
                         )
                     }
                 }
+                    // ==========================================
+                    // 📸 ГАЛЕРЕЯ СКРИНШОТОВ (С плавной загрузкой)
+                    // ==========================================
+                    if (screenshots.isNotEmpty()) {
+                        Text(
+                            text = "Кадры",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 12.dp)
+                        )
 
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            itemsIndexed(screenshots) { index, url ->
+                                Box(
+                                    modifier = Modifier
+                                        .width(240.dp)
+                                        .height(135.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF2A2A2A))
+                                        // 👇 ЭТОТ КЛИК САМЫЙ МОЩНЫЙ
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = ripple()
+                                        ) {
+                                            selectedScreenshotIndex = index
+                                        }
+                                ) {
+                                    AsyncImage(
+                                        model = url,
+                                        contentDescription = "Скриншот",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                        }
+                    }
                 // 5. ОПИСАНИЕ
                 Text("Сюжет", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, top = 20.dp))
 
@@ -485,6 +556,15 @@ class DetailsActivity : AppCompatActivity() {
                 }
             }
         } // 👈 Это закрывающая скобка Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121212)))
+        if (selectedScreenshotIndex != null) {
+            ScreenshotViewerOverlay(
+                screenshots = screenshots,
+                initialIndex = selectedScreenshotIndex!!,
+                onDismiss = { selectedScreenshotIndex = null },
+                context = LocalContext.current
+            )
+        }
+        // --- ДИАЛОГ ПРОСМОТРА СКРИНШОТОВ ---
     } // 👈 Это закрытие DetailsScreen
 
     // Компонент тега
@@ -594,6 +674,48 @@ class DetailsActivity : AppCompatActivity() {
                 .setMessage(message)
                 .setPositiveButton("Понятно", null)
                 .show()
+        }
+    }
+}
+
+suspend fun saveImageToGallery(context: Context, url: String) {
+    try {
+        // 1. Просим Coil отдать нам картинку (он возьмет её из кэша!)
+        val request = ImageRequest.Builder(context)
+            .data(url)
+            .build()
+        val result = context.imageLoader.execute(request)
+
+        if (result is SuccessResult) {
+            val bitmap = result.drawable.toBitmap()
+
+            // 2. Сохраняем Bitmap в галерею телефона
+            val filename = "animouse_screen_${System.currentTimeMillis()}.jpg"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/AniMouse")
+                }
+            }
+
+            val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Сохранено в галерею! 📸", Toast.LENGTH_SHORT).show()
+                }
+                return
+            }
+        }
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Не удалось получить картинку", Toast.LENGTH_SHORT).show()
+        }
+    } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Ошибка сохранения!", Toast.LENGTH_SHORT).show()
         }
     }
 }

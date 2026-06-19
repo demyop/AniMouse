@@ -9,3 +9,8 @@ data class ShikimoriAnimeDetails(
     val episodes_aired: Int,
     val status: String
 )
+
+data class ShikiScreenshot(
+    val original: String,
+    val preview: String
+)

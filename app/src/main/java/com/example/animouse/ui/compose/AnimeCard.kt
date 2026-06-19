@@ -1,5 +1,6 @@
 package com.example.animouse.ui.compose
 
+import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +32,18 @@ import com.example.animouse.R
 import com.example.animouse.data.model.Anime
 import com.example.animouse.ui.viewmodel.MainViewModel.CustomFolderPreview
 import com.example.animouse.data.model.ShikimoriSearchResult
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.animouse.ui.activity.saveImageToGallery
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 // ========================================================
 // 1. ВЕРТИКАЛЬНАЯ КАРТОЧКА (С ИДЕАЛЬНОЙ ТИПОГРАФИКОЙ)
@@ -367,5 +380,83 @@ fun SearchAnimeCard(anime: ShikimoriSearchResult, seasonYearText: String, onClic
 fun StatusBadge(text: String, color: Color) {
     Box(modifier = Modifier.background(color = color, shape = RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Text(text = text, color = Color(0xFF121212), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ScreenshotViewerOverlay(
+    screenshots: List<String>,
+    initialIndex: Int,
+    onDismiss: () -> Unit,
+    context: Context
+) {
+    val pagerState = rememberPagerState(initialPage = initialIndex) { screenshots.size }
+    val coroutineScope = rememberCoroutineScope() // Для запуска сохранения картинки
+
+    // Обрабатываем физическую кнопку "Назад"
+    BackHandler(onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black) // Черный фон теперь ТОЧНО залезет под все шторки
+            // Блокируем клики, чтобы не нажать на элементы списка позади черного экрана
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
+    ) {
+        // Карусель картинок
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            AsyncImage(
+                model = screenshots[page],
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // Верхняя панель: Кнопка Назад и Счетчик (Безопасный отступ от чёлки!)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding() // 👈 Идеально отступает от статус-бара
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onDismiss) {
+                Icon(painterResource(R.drawable.ic_arrow_reg), contentDescription = "Закрыть", tint = Color.White)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${pagerState.currentPage + 1} / ${screenshots.size}",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.size(48.dp)) // Баланс для центрирования
+        }
+
+        // Кнопка Скачать (Безопасный отступ от полоски жестов!)
+        Button(
+            onClick = {
+                // Запускаем корутину для сохранения
+                coroutineScope.launch {
+                    saveImageToGallery(context, screenshots[pagerState.currentPage])
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding() // 👈 Идеально отступает от нижней полоски
+                .padding(bottom = 24.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("Скачать кадр", color = Color.White, fontWeight = FontWeight.Bold)
+        }
     }
 }

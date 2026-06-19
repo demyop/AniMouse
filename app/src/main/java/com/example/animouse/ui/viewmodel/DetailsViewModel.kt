@@ -12,7 +12,9 @@ import com.example.animouse.data.model.ShikimoriAnimeDetails
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import android.util.Log
 
 @HiltViewModel
 class DetailsViewModel @Inject constructor(
@@ -150,8 +152,11 @@ class DetailsViewModel @Inject constructor(
                 _animeDetails.value = response
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Ошибка сети"
-                _animeDetails.value = null
+                Log.e("AniMouseNetwork", "Шикимори отвалился! Причина: ${e.message}")
+
+                withContext(Dispatchers.Main) {
+                    _screenshots.value = emptyList() // или null для деталей
+                }
             }
         }
     }
@@ -250,6 +255,36 @@ class DetailsViewModel @Inject constructor(
             }
             // Перезагружаем галочки
             loadCustomListsData(animeId)
+        }
+    }
+    // --- СКРИНШОТЫ ---
+    private val _screenshots = MutableLiveData<List<String>>(emptyList())
+    val screenshots: LiveData<List<String>> = _screenshots
+
+    fun loadScreenshots(idMal: Int) {
+        // Если ID невалидный, даже не пытаемся стучаться на сервер
+        if (idMal <= 0) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Вызываем метод из ShikimoriApi (замени shikimoriApi на имя твоей переменной ретрофита)
+                val response = shikimoriApi.getAnimeScreenshots(idMal)
+
+                // Шикимори присылает пути вида "/system/animes/original/1.jpg"
+                // Нам нужно приклеить к ним базовый домен, чтобы Coil смог их скачать
+                val fullUrls = response.map { "https://shikimori.one${it.original}" }
+
+                withContext(Dispatchers.Main) {
+                    _screenshots.value = fullUrls
+                }
+            } catch (e: Exception) {
+                Log.e("AniMouseNetwork", "Шикимори отвалился! Причина: ${e.message}")
+
+                withContext(Dispatchers.Main) {
+                    _screenshots.value = emptyList() // или null для деталей
+                }
+            }
+
         }
     }
 }

@@ -1,10 +1,11 @@
 package com.example.animouse.data.api
 
 import com.example.animouse.data.model.ShikimoriSearchResult
-import retrofit2.http.Query
 import com.example.animouse.data.model.ShikimoriAnimeDetails
+import com.example.animouse.data.model.ShikiScreenshot // 👈 Не забудь импорт!
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ShikimoriApi {
     @GET("animes/{id}")
@@ -16,6 +17,12 @@ interface ShikimoriApi {
     @GET("animes")
     suspend fun searchAnime(
         @Query("search") searchQuery: String,
-        @Query("limit") limit: Int = 20 // Ограничим выдачу 20 результатами для скорости
+        @Query("limit") limit: Int = 20
     ): List<ShikimoriSearchResult>
+
+    // 👇 НАШ НОВЫЙ ЭНДПОИНТ ДЛЯ СКРИНШОТОВ 👇
+    @GET("animes/{id}/screenshots")
+    suspend fun getAnimeScreenshots(
+        @Path("id") idMal: Int // У Шикимори их ID совпадает с MAL ID
+    ): List<ShikiScreenshot>
 }
