@@ -15,13 +15,31 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import android.util.Log
+import com.example.animouse.data.database.AnimeDetailsEntity
+import com.example.animouse.data.repository.AnimeRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import com.example.animouse.di.AppModule
 
 @HiltViewModel
 class DetailsViewModel @Inject constructor(
-    private val database: AppDatabase,         // 👈 Hilt сам даст нам базу данных
-    private val aniListApi: AniListApi,        // 👈 Hilt даст доступ к AniList
-    private val shikimoriApi: ShikimoriApi     // 👈 Hilt даст доступ к Shikimori
-) : ViewModel() {                              // 👈 Больше не нужен AndroidViewModel!
+    private val repository: AnimeRepository,
+    private val database: AppDatabase
+) : ViewModel() {
+
+    // 1. Используем StateFlow (Реактивный подход)
+    private val _animeDetails = MutableStateFlow<AnimeDetailsEntity?>(null)
+    val animeDetails: StateFlow<AnimeDetailsEntity?> = _animeDetails
+
+    // Метод подписки (вызывай его из onCreate вместо старого loadAnimeDetails)
+    fun observeAnimeDetails(idMal: Int) {
+        viewModelScope.launch {
+            repository.getAnimeDetails(idMal).collectLatest { entity ->
+                _animeDetails.value = entity
+            }
+        }
+    }
 
     // --- 1. ЛОКАЛЬНАЯ БАЗА (Списки пользователя) ---
     private val _currentStatus = MutableLiveData<String?>()
@@ -77,89 +95,24 @@ class DetailsViewModel @Inject constructor(
     }
 
     // --- 3. СЕТЬ (Доп. данные из AniList: Трейлер и Связанное) ---
-    private val _aniListExtra = MutableLiveData<com.example.animouse.data.model.AniListExtraMedia?>()
+    private val _aniListExtra =
+        MutableLiveData<com.example.animouse.data.model.AniListExtraMedia?>()
     val aniListExtra: LiveData<com.example.animouse.data.model.AniListExtraMedia?> = _aniListExtra
 
+    // В DetailsViewModel
     fun loadAniListExtra(animeId: Int, idMal: Int) {
         viewModelScope.launch {
-            try {
-                // Определяем, откуда мы пришли: из поиска (только idMal) или с главного экрана (оба ID)
-                val isSearchByMal = animeId == -1 && idMal != -1
-
-                val query = if (isSearchByMal) {
-                    """
-                    query(${'$'}idMal: Int) {
-                      Media(idMal: ${'$'}idMal, type: ANIME) {
-                        id
-                        season
-                        seasonYear
-                        trailer { id site }
-                        relations { edges { relationType node { id idMal title { romaji } coverImage { large } averageScore } } }
-                        nextAiringEpisode {
-                          airingAt
-                          episode
-                        }
-                      }
-                    }
-                    """.trimIndent()
-                } else {
-                    """
-                    query(${'$'}id: Int) {
-                      Media(id: ${'$'}id, type: ANIME) {
-                        id
-                        season
-                        seasonYear
-                        trailer { id site }
-                        relations { edges { relationType node { id idMal title { romaji } coverImage { large } averageScore } } }
-                        nextAiringEpisode {
-                          airingAt
-                          episode
-                        }
-                      }
-                    }
-                    """.trimIndent()
-                }
-
-                val variables = if (isSearchByMal) mapOf("idMal" to idMal) else mapOf("id" to animeId)
-                val request = GraphQLRequest(query, variables)
-
-                // 👇 ИСПОЛЬЗУЕМ АПИ ИЗ HILT!
-                val response = aniListApi.getAnimeDetails(request)
-
-                _aniListExtra.value = response.data.Media
-            } catch (e: Exception) {
-                _aniListExtra.value = null
-            }
+            // 👇 Обращаемся через repository
+            _aniListExtra.value = repository.getAniListExtra(animeId, idMal)
         }
     }
 
     // --- 2. СЕТЬ (Данные из Шикимори) ---
-    private val _animeDetails = MutableLiveData<ShikimoriAnimeDetails?>()
-    val animeDetails: LiveData<ShikimoriAnimeDetails?> = _animeDetails
+
 
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
 
-    fun loadAnimeDetails(idMal: Int) {
-        if (idMal == -1) {
-            _error.value = "ID MyAnimeList не найден"
-            return
-        }
-        viewModelScope.launch {
-            try {
-                // 👇 ИСПОЛЬЗУЕМ АПИ ИЗ HILT!
-                val response = shikimoriApi.getAnimeDetails(idMal)
-                _animeDetails.value = response
-                _error.value = null
-            } catch (e: Exception) {
-                Log.e("AniMouseNetwork", "Шикимори отвалился! Причина: ${e.message}")
-
-                withContext(Dispatchers.Main) {
-                    _screenshots.value = emptyList() // или null для деталей
-                }
-            }
-        }
-    }
 
     // --- 4. ЗАМЕТКИ (Локальная БД) ---
     private val _notes = MutableLiveData<List<com.example.animouse.data.database.NoteEntity>>()
@@ -190,8 +143,10 @@ class DetailsViewModel @Inject constructor(
     }
 
     // --- 5. КАСТОМНЫЕ СПИСКИ (Локальная БД) ---
-    private val _allCustomLists = MutableLiveData<List<com.example.animouse.data.database.CustomListEntity>>()
-    val allCustomLists: LiveData<List<com.example.animouse.data.database.CustomListEntity>> = _allCustomLists
+    private val _allCustomLists =
+        MutableLiveData<List<com.example.animouse.data.database.CustomListEntity>>()
+    val allCustomLists: LiveData<List<com.example.animouse.data.database.CustomListEntity>> =
+        _allCustomLists
 
     private val _activeCustomListIds = MutableLiveData<List<Int>>()
     val activeCustomListIds: LiveData<List<Int>> = _activeCustomListIds
@@ -209,7 +164,10 @@ class DetailsViewModel @Inject constructor(
 
     fun createNewCustomList(name: String, colorHex: String, currentAnimeId: Int) {
         viewModelScope.launch {
-            val newList = com.example.animouse.data.database.CustomListEntity(name = name, colorHex = colorHex)
+            val newList = com.example.animouse.data.database.CustomListEntity(
+                name = name,
+                colorHex = colorHex
+            )
             database.customListDao().insertList(newList)
             // Обновляем данные, чтобы список сразу появился в меню
             loadCustomListsData(currentAnimeId)
@@ -257,34 +215,19 @@ class DetailsViewModel @Inject constructor(
             loadCustomListsData(animeId)
         }
     }
+
     // --- СКРИНШОТЫ ---
     private val _screenshots = MutableLiveData<List<String>>(emptyList())
     val screenshots: LiveData<List<String>> = _screenshots
 
     fun loadScreenshots(idMal: Int) {
-        // Если ID невалидный, даже не пытаемся стучаться на сервер
         if (idMal <= 0) return
-
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // Вызываем метод из ShikimoriApi (замени shikimoriApi на имя твоей переменной ретрофита)
-                val response = shikimoriApi.getAnimeScreenshots(idMal)
-
-                // Шикимори присылает пути вида "/system/animes/original/1.jpg"
-                // Нам нужно приклеить к ним базовый домен, чтобы Coil смог их скачать
-                val fullUrls = response.map { "https://shikimori.one${it.original}" }
-
-                withContext(Dispatchers.Main) {
-                    _screenshots.value = fullUrls
-                }
-            } catch (e: Exception) {
-                Log.e("AniMouseNetwork", "Шикимори отвалился! Причина: ${e.message}")
-
-                withContext(Dispatchers.Main) {
-                    _screenshots.value = emptyList() // или null для деталей
-                }
+            // Теперь репозиторий берет на себя всю грязную работу
+            val urls = repository.getScreenshots(idMal)
+            withContext(Dispatchers.Main) {
+                _screenshots.value = urls
             }
-
         }
     }
 }

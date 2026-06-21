@@ -70,7 +70,9 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.animouse.ui.compose.ScreenshotViewerOverlay
 import kotlinx.coroutines.withContext
-
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.animouse.ui.compose.NotesBottomSheetContent
+import kotlinx.coroutines.delay
 
 
 @AndroidEntryPoint
@@ -109,7 +111,7 @@ class DetailsActivity : AppCompatActivity() {
         }
         // 👇 Безопасно обновляем данные с серверов
         if (idMal != -1) {
-            viewModel.loadAnimeDetails(idMal)
+            viewModel.observeAnimeDetails(idMal)
             viewModel.loadScreenshots(idMal)
         }
         viewModel.loadAniListExtra(currentAnimeId, idMal)
@@ -141,7 +143,6 @@ class DetailsActivity : AppCompatActivity() {
         val scrollState = rememberScrollState()
         val coroutineScope = rememberCoroutineScope()
         // Подписываемся на все LiveData
-        val animeDetails by viewModel.animeDetails.observeAsState()
         val aniListExtra by viewModel.aniListExtra.observeAsState()
         val notes by viewModel.notes.observeAsState(emptyList())
         val activeCustomListIds by viewModel.activeCustomListIds.observeAsState(emptyList())
@@ -154,13 +155,14 @@ class DetailsActivity : AppCompatActivity() {
         var isNotesSheetVisible by remember { mutableStateOf(false) } // 👈 Добавили стейт
         var isRefreshing by remember { mutableStateOf(false) } // 👈 Добавили флаг обновления
         val pullRefreshState = rememberPullToRefreshState() // 👈 Добавляем это
+        val animeDetails by viewModel.animeDetails.collectAsStateWithLifecycle()
 
         // Обновляем тайтл, если пришел с Шикимори
-        val displayTitle = animeDetails?.russian?.takeIf { it.isNotBlank() } ?: currentTitle
+        val displayTitle = animeDetails?.russianTitle?.takeIf { it.isNotBlank() } ?: currentTitle
 
         // Логика эпизодов
         // Логика эпизодов (Гибридная: AniList + Shikimori)
-        val totalEp = if (totalEpisodesAniList > 0) totalEpisodesAniList else (animeDetails?.episodes ?: 0)
+        val totalEp = if (totalEpisodesAniList > 0) totalEpisodesAniList else (animeDetails?.episodesTotal ?: 0)
 
         val shikiStatus = animeDetails?.status ?: ""
         val nextAniEp = aniListExtra?.nextAiringEpisode?.episode
@@ -170,7 +172,7 @@ class DetailsActivity : AppCompatActivity() {
         } else if (shikiStatus.lowercase() in listOf("released", "finished", "completed")) {
             totalEp // Если тайтл завершен, значит вышли все серии
         } else {
-            animeDetails?.episodes_aired ?: 0 // Страховочный фолбэк на Шикимори
+            animeDetails?.episodesAired ?: 0 // 👈 Берем точную цифру из Шикимори!
         }
 
         // Логика описания
@@ -195,7 +197,7 @@ class DetailsActivity : AppCompatActivity() {
                         }
                         // 👇 Безопасные вызовы к API Шикимори
                         if (idMal != -1) {
-                            viewModel.loadAnimeDetails(idMal)
+                            viewModel.observeAnimeDetails(idMal)
                             viewModel.loadScreenshots(idMal)
                         }
 
@@ -203,7 +205,7 @@ class DetailsActivity : AppCompatActivity() {
                         viewModel.loadAniListExtra(currentAnimeId, idMal)
 
                         // Небольшая искусственная задержка
-                        kotlinx.coroutines.delay(500)
+                        delay(500)
                         isRefreshing = false
                     }
                 },
@@ -312,7 +314,8 @@ class DetailsActivity : AppCompatActivity() {
                     }
 
                     // 👈 Добавили серый цвет и иконку
-                    for (genre in genres) {
+                    val displayGenres = aniListExtra?.genres ?: genres
+                    for (genre in displayGenres) {
                         DetailBadge(genre, Color(0xFF1E1E1E), Color(0xFFAAAAAA), R.drawable.ic_tag_reg)
                     }
                 }
@@ -542,13 +545,13 @@ class DetailsActivity : AppCompatActivity() {
                 ) {
                     val notesList by viewModel.notes.observeAsState(emptyList())
 
-                    com.example.animouse.ui.compose.NotesBottomSheetContent(
+                    NotesBottomSheetContent(
                         notes = notesList,
                         onSendClick = { text, editingNote ->
                             if (editingNote != null) {
                                 viewModel.addOrUpdateNote(editingNote.copy(content = text))
                             } else {
-                                viewModel.addOrUpdateNote(com.example.animouse.data.database.NoteEntity(animeId = currentAnimeId, content = text))
+                                viewModel.addOrUpdateNote(NoteEntity(animeId = currentAnimeId, content = text))
                             }
                         },
                         onDeleteClick = { note -> viewModel.deleteNote(note) }
@@ -597,11 +600,13 @@ class DetailsActivity : AppCompatActivity() {
                 )
             }
 
-            val currentDetails by viewModel.animeDetails.observeAsState()
+            val currentDetails by viewModel.animeDetails.collectAsStateWithLifecycle()
             val extraData by viewModel.aniListExtra.observeAsState()
 
-            val epAired = currentDetails?.episodes_aired ?: 0
-            val epTotal = if (epTotalAniList > 0) epTotalAniList else (currentDetails?.episodes ?: 0)
+            val epAired = 0 // ВАЖНО: В твоей новой Entity нет поля episodes_aired.
+            // Если оно нужно для логики, добавь его в AnimeDetailsEntity!
+
+            val epTotal = if (epTotalAniList > 0) epTotalAniList else (currentDetails?.episodesTotal ?: 0)
             val animeReleaseStatus = currentDetails?.status
             val animeSeason = extraData?.season
             val animeSeasonYear = extraData?.seasonYear

@@ -5,6 +5,7 @@ data class AniListExtraData(val Media: AniListExtraMedia)
 
 data class AniListExtraMedia(
     val id: Int?,
+    val genres: List<String>?,
     val trailer: Trailer?,
     val relations: Relations?,
     val nextAiringEpisode: NextAiringEpisode?,

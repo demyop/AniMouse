@@ -25,4 +25,11 @@ interface ShikimoriApi {
     suspend fun getAnimeScreenshots(
         @Path("id") idMal: Int // У Шикимори их ID совпадает с MAL ID
     ): List<ShikiScreenshot>
+
+    @GET("animes")
+    suspend fun getAnimeListByIds(
+        @Query("ids") ids: String, // Сюда передадим строку "1,2,3,4"
+        @Query("limit") limit: Int = 50 // Максимум у Шики 50 за раз
+    ): List<ShikimoriSearchResult>
+
 }

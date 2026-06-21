@@ -52,6 +52,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.collectAsState
+import com.example.animouse.data.model.Title
+import com.example.animouse.data.model.CoverImage
+import com.example.animouse.data.model.NextAiringEpisode
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -70,7 +74,7 @@ class MainActivity : AppCompatActivity() {
 
     @Composable
     fun MainScreen() {
-        val allAnime by viewModel.allAnime.observeAsState(emptyList())
+        val allAnime by viewModel.allAnime.collectAsState()
         val localAnime by viewModel.localAnime.observeAsState(emptyList())
         val statuses by viewModel.animeStatuses.observeAsState(emptyMap())
         val customBadges by viewModel.animeCustomBadges.observeAsState(emptyMap())
@@ -158,10 +162,36 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     when (currentTab) {
                         0 -> {
+                            // 🪄 МАГИЧЕСКИЙ ПЕРЕХОДНИК:
+                            // Превращаем новые чистые Entity из БД в старые классы Anime для UI
+                            val mappedAllAnime = allAnime.map { entity ->
+                                Anime(
+                                    id = entity.idMal,
+                                    idMal = entity.idMal,
+                                    title = Title(romaji = entity.titleRussian ?: entity.titleRomaji ?: "Без названия"),
+                                    coverImage = CoverImage(large = entity.posterUrl ?: ""),
+                                    averageScore = entity.score,
+                                    episodes = entity.episodes,
+                                    status = "RELEASING",
+                                    season = null,
+                                    seasonYear = null,
+                                    description = null,
+                                    genres = emptyList(),
+                                    // ВОСКРЕШАЕМ КАЛЕНДАРЬ! (Теперь по-настоящему)
+                                    nextAiringEpisode = if (entity.nextAiringAt != null && entity.nextEpisode != null) {
+                                        NextAiringEpisode(
+                                            airingAt = entity.nextAiringAt!!,
+                                            timeUntilAiring = 0,
+                                            episode = entity.nextEpisode!!
+                                        )
+                                    } else null
+                                )
+                            }
+
                             if (isGridView) {
                                 NarrowFiltersBar(sortMethod, { sortMethod = it }, isFavoritesOnly, { isFavoritesOnly = it })
-                                val processedList = allAnime.filter { if (isFavoritesOnly) statuses.containsKey(it.id) else true }.let { list ->
-                                    // ... сортировка ... (оставь свою логику сортировки)
+                                // 👇 Заменили allAnime на mappedAllAnime
+                                val processedList = mappedAllAnime.filter { if (isFavoritesOnly) statuses.containsKey(it.id) else true }.let { list ->
                                     when (sortMethod) {
                                         0 -> list.sortedByDescending { it.averageScore ?: 0 }
                                         1 -> list.sortedBy { it.averageScore ?: 0 }
@@ -174,12 +204,13 @@ class MainActivity : AppCompatActivity() {
                                     animeList = processedList,
                                     statuses = statuses,
                                     customBadges = customBadges,
-                                    openedFolderId = null, // 👈 НА ГЛАВНОМ ЭКРАНЕ ПОКАЗЫВАЕМ ВСЕ ТЕГИ
+                                    openedFolderId = null,
                                     onAnimeClick = { navigateToDetails(it) },
-                                    onAnimeLongClick = { showBottomSheetDialog(it) }
+                                    onAnimeLongClick = { showBottomSheetDialog(it) } // 👈 Обрати внимание, чтобы тут не было ошибок!
                                 )
                             } else {
-                                ScheduleViewWithDates(allAnime, isFavoritesOnly, customBadges, sortMethod, { sortMethod = it }, { isFavoritesOnly = it })
+                                // И здесь тоже используем mappedAllAnime
+                                ScheduleViewWithDates(mappedAllAnime, isFavoritesOnly, customBadges, sortMethod, { sortMethod = it }, { isFavoritesOnly = it })
                             }
                         }
                         1 -> {

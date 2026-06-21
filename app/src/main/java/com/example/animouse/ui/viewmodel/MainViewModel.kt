@@ -13,6 +13,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import com.example.animouse.data.database.AnimeListItemEntity
 
 @HiltViewModel // 1. Говорим, что эта ViewModel использует Hilt
 class MainViewModel @Inject constructor(
@@ -24,8 +27,8 @@ class MainViewModel @Inject constructor(
     // Наш репозиторий (по-хорошему, его потом тоже надо будет инжектить через Hilt,
     // но пока оставим так, чтобы не сломать логику)
 
-    private val _allAnime = MutableLiveData<List<Anime>>(emptyList())
-    val allAnime: LiveData<List<Anime>> = _allAnime
+    private val _allAnime = MutableStateFlow<List<AnimeListItemEntity>>(emptyList())
+    val allAnime: StateFlow<List<AnimeListItemEntity>> = _allAnime
 
     private val _localAnime = MutableLiveData<List<UserAnimeEntity>>()
     val localAnime: LiveData<List<UserAnimeEntity>> = _localAnime
@@ -42,16 +45,15 @@ class MainViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             try {
-                // 1. Загружаем все сохраненные пользователем тайтлы
+                // 1. Загружаем все сохраненные пользователем тайтлы (это остается как было)
                 val savedAnime = database.userAnimeDao().getAll()
-                // Превращаем список в Map для мгновенного поиска по ID
                 _animeStatuses.value = savedAnime.filter { it.status != null }
                     .associate { it.animeId to it.status!! }
 
-                // 2. Загружаем онгоинги из сети
-                val response = repository.getAnimeList()
-                if (response.isSuccessful) {
-                    _allAnime.value = response.body()?.data?.Page?.media ?: emptyList()
+                // 2. ВАУ! Подписываемся на наш умный репозиторий
+                // Теперь UI будет сам обновляться, когда прилетят русские названия с Шикимори
+                repository.getTrendingAnimeFlow().collect { entities ->
+                    _allAnime.value = entities
                 }
             } catch (e: Exception) {
                 Log.e("MainViewModel", e.message ?: "Unknown error")
@@ -71,20 +73,21 @@ class MainViewModel @Inject constructor(
                 }
             } else {
                 // Пытаемся найти аниме в текущем загруженном списке главного экрана
-                val animeFromList = _allAnime.value?.find { it.id == animeId }
+                val animeFromList = _allAnime.value.find { it.idMal == animeId }
 
                 if (animeFromList != null) {
-                    // Если нашли в сети — сохраняем полную карточку
+                    // Если нашли в нашем умном кэше — сохраняем полную карточку
                     val entity = UserAnimeEntity(
                         animeId = animeId,
-                        idMal = animeFromList.idMal ?: -1,
+                        idMal = animeFromList.idMal,
                         status = status,
-                        title = animeFromList.title.romaji ?: "Без названия",
-                        posterUrl = animeFromList.coverImage.large,
-                        score = animeFromList.averageScore ?: 0,
-                        episodesTotal = animeFromList.episodes ?: 0,
-                        episodesAired = animeFromList.nextAiringEpisode?.episode?.minus(1) ?: 0,
-                        animeStatus = animeFromList.status
+                        // Берем русское название, а если его пока нет (еще грузится) — берем английское
+                        title = animeFromList.titleRussian ?: animeFromList.titleRomaji,
+                        posterUrl = animeFromList.posterUrl,
+                        score = animeFromList.score,
+                        episodesTotal = animeFromList.episodes,
+                        episodesAired = 0, // Это поле можно добавить в AnimeListItemEntity позже
+                        animeStatus = "RELEASING" // Так как мы тянем онгоинги
                     )
                     database.userAnimeDao().insert(entity)
                 } else {
