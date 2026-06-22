@@ -31,6 +31,14 @@
         <activity
             android:name=".ui.activity.NotesHubActivity"
             android:exported="false" />
+        <activity android:name=".ui.activity.NewsDetailsActivity" android:exported="false" android:theme="@style/Theme.AppCompat.NoActionBar" />
+        <activity android:name=".ui.activity.AllNewsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+        <activity android:name=".ui.activity.AnimeCollectionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
     </application>
+
 
 </manifest>

@@ -20,9 +20,12 @@ import com.example.animouse.data.database.AnimeListItemEntity
 @HiltViewModel // 1. Говорим, что эта ViewModel использует Hilt
 class MainViewModel @Inject constructor(
     private val database: AppDatabase,
-    private val repository: AnimeRepository// 2. Hilt сам принесет нам готовую базу!
+    private val repository: AnimeRepository,// 2. Hilt сам принесет нам готовую базу!
 
 ) : ViewModel() { // 3. Наследуемся от обычного ViewModel, Application больше не нужен
+
+    // 👇 ДОБАВЛЯЙ СЮДА: Хранилище для детального экрана новости
+    var selectedNewsForDetails: com.example.animouse.data.model.AnimeNews? = null
 
     // Наш репозиторий (по-хорошему, его потом тоже надо будет инжектить через Hilt,
     // но пока оставим так, чтобы не сломать логику)
@@ -45,14 +48,13 @@ class MainViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             try {
-                // 1. Загружаем все сохраненные пользователем тайтлы (это остается как было)
+                // 1. Загружаем все сохраненные пользователем тайтлы
                 val savedAnime = database.userAnimeDao().getAll()
                 _animeStatuses.value = savedAnime.filter { it.status != null }
                     .associate { it.animeId to it.status!! }
 
-                // 2. ВАУ! Подписываемся на наш умный репозиторий
-                // Теперь UI будет сам обновляться, когда прилетят русские названия с Шикимори
-                repository.getTrendingAnimeFlow().collect { entities ->
+                // 2. 👇 ФИКС: Используем тот же мощный поток, что и для Карусели "В этом сезоне"!
+                repository.getDiscoveryListFlow("DISCOVERY_TRENDING").collect { entities ->
                     _allAnime.value = entities
                 }
             } catch (e: Exception) {
@@ -208,6 +210,141 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val newList = com.example.animouse.data.database.CustomListEntity(name = name, colorHex = colorHex)
             database.customListDao().insertList(newList)
+            updateLocalStatuses()
+        }
+    }
+
+    // ===================================================================
+    // ДАННЫЕ ДЛЯ НОВОГО СУПЕР-ЭКРАНА (DISCOVERY)
+    // ===================================================================
+
+    // Наша "коробка", в которой лежит всё для главного экрана
+    data class DiscoveryUiState(
+        val isLoading: Boolean = true,
+        val news: List<com.example.animouse.data.model.AnimeNews> = emptyList(),
+        val trending: List<AnimeListItemEntity> = emptyList(),
+        val upcoming: List<AnimeListItemEntity> = emptyList(),
+        val top100: List<AnimeListItemEntity> = emptyList()
+    )
+
+    private val _discoveryState = MutableStateFlow(DiscoveryUiState())
+    val discoveryState: StateFlow<DiscoveryUiState> = _discoveryState
+
+    // Этот метод мы вызовем, когда перейдем на вкладку Супер-экрана
+    fun loadDiscoveryScreenData() {
+        // 1. Отдельно грузим новости (так как мы решили их не кэшировать)
+        viewModelScope.launch {
+            try {
+                val freshNews = repository.getNews()
+                _discoveryState.value = _discoveryState.value.copy(news = freshNews)
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Ошибка загрузки новостей", e)
+            }
+        }
+
+        // 2. Подписываемся на Тренды
+        viewModelScope.launch {
+            repository.getDiscoveryListFlow("DISCOVERY_TRENDING").collect { entities ->
+                _discoveryState.value = _discoveryState.value.copy(trending = entities, isLoading = false)
+            }
+        }
+
+        // 3. Подписываемся на Анонсы
+        viewModelScope.launch {
+            repository.getDiscoveryListFlow("UPCOMING").collect { entities ->
+                _discoveryState.value = _discoveryState.value.copy(upcoming = entities)
+            }
+        }
+
+        // 4. Подписываемся на Топ-100
+        viewModelScope.launch {
+            repository.getDiscoveryListFlow("TOP_100").collect { entities ->
+                _discoveryState.value = _discoveryState.value.copy(top100 = entities)
+            }
+        }
+    }
+
+    // 👇 Состояние для крутилки на кубике
+    val isRandomLoading = androidx.compose.runtime.mutableStateOf(false)
+
+    // Функция броска
+// Функция броска
+    fun rollRandomAnime(onSuccess: (com.example.animouse.data.model.ShikimoriSearchResult) -> Unit) {
+        if (isRandomLoading.value) return // Защита от двойного клика
+
+        // 👇 Теперь код выглядит чисто и аккуратно
+        viewModelScope.launch {
+            isRandomLoading.value = true
+            val randomResult = repository.rollTheDice()
+            isRandomLoading.value = false
+
+            if (randomResult != null) {
+                onSuccess(randomResult)
+            }
+        }
+    }
+    // --- УНИВЕРСАЛЬНЫЕ МЕТОДЫ ДЛЯ ЛЮБОГО ЭКРАНА ---
+    // --- УНИВЕРСАЛЬНЫЕ МЕТОДЫ ДЛЯ ЛЮБОГО ЭКРАНА ---
+    fun updateAnimeStatusUniversal(anime: com.example.animouse.data.model.Anime, status: String?) {
+        viewModelScope.launch {
+            if (status == null || status == "NONE") {
+                val current = database.userAnimeDao().getAnimeById(anime.id)
+                if (current != null) {
+                    database.userAnimeDao().insert(current.copy(status = null))
+                    database.userAnimeDao().deleteIfUnused(anime.id)
+                }
+            } else {
+                val existing = database.userAnimeDao().getAnimeById(anime.id)
+
+                // БЕЗОПАСНЫЙ МАППИНГ: используем ?. для защиты от null
+                val entity = existing?.copy(status = status) ?: UserAnimeEntity(
+                    animeId = anime.id,
+                    idMal = anime.idMal ?: anime.id,
+                    status = status, // (Во втором методе тут будет status = null)
+                    title = anime.title.romaji ?: "Без названия",
+                    posterUrl = anime.coverImage.large,
+
+                    // 👇 БЕЗОПАСНЫЙ INT (Если оценки нет, ставим 0)
+                    score = anime.averageScore ?: 0,
+
+                    episodesTotal = anime.episodes ?: 0,
+                    episodesAired = 0,
+                    animeStatus = anime.status ?: "RELEASING"
+                )
+                database.userAnimeDao().insert(entity)
+            }
+            updateLocalStatuses()
+        }
+    }
+
+    fun toggleAnimeInCustomListUniversal(anime: com.example.animouse.data.model.Anime, listId: Int, isAdding: Boolean) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (isAdding) {
+                val existing = database.userAnimeDao().getAnimeById(anime.id)
+                if (existing == null) {
+                    // 👈 ТУТ БЫЛА ОШИБКА: Добавили обязательный status = null
+                    if (existing == null) {
+                        val entity = UserAnimeEntity(
+                            animeId = anime.id,
+                            idMal = anime.idMal ?: anime.id,
+                            status = null, // 👈 Тут обязательно null для "болванки"
+                            title = anime.title.romaji ?: "Без названия",
+                            posterUrl = anime.coverImage.large,
+
+                            // 👇 То же самое лекарство:
+                            score = anime.averageScore ?: 0,
+
+                            episodesTotal = anime.episodes ?: 0,
+                            episodesAired = 0,
+                            animeStatus = anime.status ?: "RELEASING"
+                        )
+                        database.userAnimeDao().insert(entity)
+                        }
+                }
+                database.customListDao().addAnimeToList(com.example.animouse.data.database.AnimeCustomListCrossRef(anime.id, listId))
+            } else {
+                database.customListDao().removeAnimeFromList(com.example.animouse.data.database.AnimeCustomListCrossRef(anime.id, listId))
+            }
             updateLocalStatuses()
         }
     }

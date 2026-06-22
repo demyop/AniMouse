@@ -6,6 +6,7 @@ import com.example.animouse.data.model.ShikiScreenshot // 👈 Не забудь
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
+import com.example.animouse.data.model.ShikimoriNewsTopic
 
 interface ShikimoriApi {
     @GET("animes/{id}")
@@ -32,4 +33,34 @@ interface ShikimoriApi {
         @Query("limit") limit: Int = 50 // Максимум у Шики 50 за раз
     ): List<ShikimoriSearchResult>
 
+    // 👇 НОВЫЙ ЭНДПОИНТ ДЛЯ НОВОСТЕЙ 👇
+    @GET("topics")
+    suspend fun getNewsTopics(
+        @Query("forum") forum: String = "news",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 10 // Грузим по 10 штук за раз, чтобы не мучить парсер
+    ): List<ShikimoriNewsTopic>
+
+    // 👇 ДОБАВЛЯЕМ ЭТО: Запрос полной версии новости (где ЕСТЬ html_body)
+    @GET("topics/{id}")
+    suspend fun getTopicDetails(
+        @Path("id") id: Int
+    ): ShikimoriNewsTopic
+
+    // Запрос новостей с поддержкой страниц (для бесконечного скролла)
+    @GET("topics")
+    suspend fun getPaginatedNewsTopics(
+        @Query("forum") forum: String = "news",
+        @Query("page") page: Int,
+        @Query("limit") limit: Int = 10 // Берем по 10, чтобы парсер не захлебнулся
+    ): List<ShikimoriNewsTopic>
+
+    // Умный рандом: берем 1 тайтл, случайно, с оценкой выше 7, формат ТВ или Фильм
+    @GET("animes")
+    suspend fun getRandomAnime(
+        @Query("limit") limit: Int = 1,
+        @Query("order") order: String = "random",
+        @Query("score") minScore: Int = 7,
+        @Query("kind") kind: String = "tv,movie"
+    ): List<com.example.animouse.data.model.ShikimoriSearchResult>
 }

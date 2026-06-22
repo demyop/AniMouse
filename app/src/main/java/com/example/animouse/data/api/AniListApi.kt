@@ -5,6 +5,7 @@ import com.example.animouse.data.model.AnimeResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
+import com.example.animouse.data.model.DiscoveryResponse
 
 interface AniListApi {
 
@@ -19,4 +20,11 @@ interface AniListApi {
     suspend fun getAnimeDetails(
         @Body request: GraphQLRequest
     ): AniListExtraResponse
+
+    // Внутри интерфейса AniListApi добавь:
+    @POST("/")
+    suspend fun getDiscoveryAnime(
+        @Body request: GraphQLRequest
+    ): Response<DiscoveryResponse>
+
 }

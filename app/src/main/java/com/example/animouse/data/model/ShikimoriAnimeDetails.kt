@@ -7,7 +7,11 @@ data class ShikimoriAnimeDetails(
     val description: String?,
     val episodes: Int,
     val episodes_aired: Int,
-    val status: String
+    val status: String,
+
+    val score: String?,
+    val image: ShikimoriImage?, // Используем класс из твоего ShikimoriSearchResponse
+    val aired_on: String?
 )
 
 data class ShikiScreenshot(

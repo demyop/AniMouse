@@ -44,6 +44,21 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Card
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.animouse.data.model.AnimeNews
 
 // ========================================================
 // 1. ВЕРТИКАЛЬНАЯ КАРТОЧКА (С ИДЕАЛЬНОЙ ТИПОГРАФИКОЙ)
@@ -198,6 +213,7 @@ fun AnimeCard(
             }
         }
     }
+
 }
 
 // ========================================================
@@ -457,6 +473,100 @@ fun ScreenshotViewerOverlay(
             shape = RoundedCornerShape(12.dp)
         ) {
             Text("Скачать кадр", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+// ========================================================
+// 4. КАРТОЧКА НОВОСТИ (Обложка + Данные снизу)
+// ========================================================
+@Composable
+fun NewsCard(news: AnimeNews, onClick: () -> Unit) {
+    // Главный контейнер, который обрабатывает клик по всей области
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        // 1. ВЕРХНЯЯ ЧАСТЬ: Карточка с обложкой и заголовком
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(240.dp), // 👈 Высота самой картинки
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+
+                // Отрисовка фона/картинки
+                if (news.imageUrl != null) {
+                    AsyncImage(
+                        model = news.imageUrl,
+                        contentDescription = "Обложка новости",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Brush.linearGradient(colors = listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))))
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_media_reg),
+                            contentDescription = null,
+                            tint = Color(0xFF333333),
+                            modifier = Modifier.size(64.dp).align(Alignment.Center)
+                        )
+                    }
+                }
+
+                // Темный градиент для читаемости текста (стал пониже, так как текста меньше)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
+                )
+
+                // Только заголовок поверх картинки
+                Text(
+                    text = news.title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp)
+                )
+            }
+        }
+
+        // 2. НИЖНЯЯ ЧАСТЬ: Дата и Теги (Вынесены под карточку!)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp, start = 4.dp, end = 4.dp), // Отступы для визуального баланса
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Слева: Красивая дата
+            Text(
+                text = news.date,
+                color = Color(0xFFAAAAAA),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            // Справа: Теги
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                news.tags.forEach { tag ->
+                    StatusBadge(text = tag, color = Color(0xFFAAAAAA))
+                }
+            }
         }
     }
 }
