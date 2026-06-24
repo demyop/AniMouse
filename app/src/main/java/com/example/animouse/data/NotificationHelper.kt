@@ -48,7 +48,7 @@ object NotificationHelper {
 
         val currentTimeMillis = System.currentTimeMillis()
 
-        // Берем дату выхода из AniList и накидываем сверху 2 часа (в миллисекундах)
+        // Магия времени: берем дату выхода из AniList и накидываем сверху 2 часа (в миллисекундах)
         val targetTimeMillis = (airingAtSec * 1000L) + (2 * 60 * 60 * 1000L)
         val delayMillis = targetTimeMillis - currentTimeMillis
 

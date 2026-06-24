@@ -7,9 +7,9 @@ data class Anime(
     val coverImage: CoverImage,
     val nextAiringEpisode: NextAiringEpisode?,
     val episodes: Int?,
-    val description: String?,   // Описание
+    val description: String?,   // Синопсис/Описание
     val genres: List<String>?,  // Список жанров
-    val averageScore: Int?,     // Рейтинг (от 0 до 100)
+    val averageScore: Int?,      // Рейтинг (от 0 до 100)
     val status: String?,
     val season: String? = null,
     val seasonYear: Int? = null

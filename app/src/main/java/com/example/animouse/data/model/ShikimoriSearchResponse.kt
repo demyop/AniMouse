@@ -1,6 +1,6 @@
 package com.example.animouse.data.model
 
-// Шикимори возвращает массив объектов при поиске
+// Шикимори возвращает массив таких объектов при поиске
 data class ShikimoriSearchResult(
     val id: Int, // В Шикимори их внутренний ID совпадает с MAL ID!
     val name: String,
@@ -8,10 +8,11 @@ data class ShikimoriSearchResult(
     val score: String?,
     val episodes: Int,
     val episodes_aired: Int,
-    val status: String?,
+    val status: String?, // <-- ДОБАВИЛИ СТАТУС В ПОИСКЕ
     val image: ShikimoriImage?,
     val aired_on: String?
 )
+
 data class ShikimoriImage(
     val original: String?
 )

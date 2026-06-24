@@ -1,6 +1,6 @@
 package com.example.animouse.data.api
 
-import com.example.animouse.data.model.ShikimoriSearchResult
+import com.example.animouse.data.model.ShikimoriSearchResult // Наша новая модель
 import retrofit2.http.Query
 import com.example.animouse.data.model.ShikimoriAnimeDetails
 import retrofit2.http.GET
@@ -12,7 +12,7 @@ interface ShikimoriApi {
         @Path("id") idMal: Int
     ): ShikimoriAnimeDetails
 
-    // Поиск по русскому или английскому названию
+    // НОВЫЙ МЕТОД: Поиск по русскому или английскому названию
     @GET("animes")
     suspend fun searchAnime(
         @Query("search") searchQuery: String,

@@ -115,6 +115,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val animeCustomBadges: LiveData<Map<Int, List<CustomFolderPreview>>> = _animeCustomBadges
 
     // Вспомогательный метод для обновления LiveData из базы
+// Вспомогательный метод для обновления LiveData из базы
+// Вспомогательный метод для обновления LiveData из базы
     fun updateLocalStatuses() {
         viewModelScope.launch {
             // 1. Получаем вообще все сохраненные тайтлы из базы

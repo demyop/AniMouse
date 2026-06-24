@@ -64,8 +64,8 @@ class AnimeNotificationWorker(
         val largeIconBitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.ic_launcher_notification)
 
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_notification_bell_alarm_sol)
-            .setLargeIcon(largeIconBitmap)
+            .setSmallIcon(R.drawable.ic_notification_bell_alarm_sol) // Твоя иконка
+            .setLargeIcon(largeIconBitmap) // <-- ДОБАВЛЯЕМ ЦВЕТНУЮ ИКОНКУ СЮДА
             .setContentTitle("Вышла $episode серия!")
             .setContentText("Тайтл «$title» уже доступен к просмотру.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)

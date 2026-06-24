@@ -1,7 +1,7 @@
 package com.example.animouse.data.api
 
-import com.example.animouse.data.model.AniListExtraResponse
 import com.example.animouse.data.model.AnimeResponse
+import com.example.animouse.data.model.AniListExtraResponse // Не забудь, что для этого нужна новая модель из Шага 1
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
